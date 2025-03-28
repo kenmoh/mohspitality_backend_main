@@ -75,7 +75,7 @@ async def register_user(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/register-super-admin", status_code=status.HTTP_201_CREATED)
+@router.post("/register-super-admin", status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def register_user(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db),
@@ -88,7 +88,7 @@ async def register_user(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/register-admin-staff", status_code=status.HTTP_201_CREATED)
+@router.post("/register-admin-staff", status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def register_admin_user(
     user_data: UserCreate,
     current_user: User = Depends(get_current_user),

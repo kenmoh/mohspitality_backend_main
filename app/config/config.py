@@ -51,12 +51,17 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
+    REDIS_EX: int = 3600
     REDIS_PASSWORD: str | None = None  # Set this in production
 
 
 settings = Settings()
 
 # Redis client setup
+
+
+redis_url = "redis://localhost"  # adjust if needed
+# redis_client = aioredis.from_url(redis_url, decode_responses=True)
 
 redis_client = redis.Redis(
     host=settings.REDIS_HOST,

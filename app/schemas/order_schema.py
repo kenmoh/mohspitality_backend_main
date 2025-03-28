@@ -1,6 +1,22 @@
 from decimal import Decimal
+from enum import Enum
+from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
+
+
+class OrderStatusEnum(str, Enum):
+    NEW = "New"
+    IN_PROGRESS = "In progress"
+    READY = "Ready"
+    COMPLETED = "Completed"
+    CANCELLED = "cancelled"
+
+
+class BillSplit(BaseModel):
+    label: str
+    split_type: Literal["amount", "percent"]
+    value: Decimal
 
 
 class OrderItemCreate(BaseModel):
@@ -14,7 +30,6 @@ class OrderItemCreate(BaseModel):
 class OrderCreate(BaseModel):
     company_id: UUID
     outlet_id: int
-    guest_id: str
     room_or_table_number: str
     items: list[OrderItemCreate]
 

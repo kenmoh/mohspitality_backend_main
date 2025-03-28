@@ -1,5 +1,6 @@
-from httpx import options
-from sqlalchemy import select, insert, update, delete
+from uuid import UUID
+import json
+from sqlalchemy import select, update, delete
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,7 @@ from app.schemas.item_schema import (
 )
 from app.schemas.user_schema import UserType
 from app.services.profile_service import check_permission
+from app.config.config import redis_client, settings
 
 
 async def create_item(
@@ -21,6 +23,8 @@ async def create_item(
     Create a new item in the database.
     """
     check_permission(user=current_user, required_permission="create_items")
+
+    cache_key = f"items:{company_id}"
 
     company_id = (
         current_user.id
@@ -42,6 +46,8 @@ async def create_item(
         db.add(new_item)
         await db.commit()
         await db.refresh(new_item)
+
+        redis_client.delete(cache_key)
 
         return new_item
     except Exception as e:
@@ -81,6 +87,12 @@ async def update_item_item_by_id(
     """
     Update an existing item.
     """
+    cache_key = f"items:{company_id}"
+    cached_items = redis_client.get(cache_key)
+
+    if cached_items:
+        return json.loads(cached_items)
+
     stmt = (
         update(Item)
         .where((Item.id == item_id) & Item.company_id == company_id)
@@ -89,20 +101,28 @@ async def update_item_item_by_id(
     )
     result = await db.execute(stmt)
 
+    redis_client.set(cache_key, json.dumps(
+        result, default=str), ex=settings.REDIS_EX)
+
     await db.commit()
     return await result.scalar_one_or_none()
 
 
 async def get_all_items(
     db: AsyncSession,
-    current_user: User,
-    company_id: str,
+    company_id: UUID,
     limit: int = 10,
     skip: int = 0,
 ) -> list[CreateItemReturnSchema]:
     """
-    Retrieve all items with pagination.
+    Retrieve all company items with pagination.
     """
+    # company_id = current_user.id if current_user.user_type == UserType.COMPANY else current_user.company_id
+    cache_key = f"items:{company_id}"
+    cached_items = redis_client.get(cache_key)
+
+    if cached_items:
+        return json.loads(cached_items)
 
     result = await db.execute(
         select(Item)
@@ -111,7 +131,13 @@ async def get_all_items(
         .offset(skip)
         .limit(limit)
     )
-    return result.unique().scalars().all()
+    items = result.unique().scalars().all()
+    items_data = [CreateItemReturnSchema.model_validate(
+        item).model_dump() for item in items]
+
+    redis_client.set(cache_key, json.dumps(
+        items_data, default=str), ex=settings.REDIS_EX)
+    return items_data
 
 
 async def delete_item_by_id(db: AsyncSession, item_id: int, current_user: User) -> None:

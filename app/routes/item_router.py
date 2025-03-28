@@ -1,3 +1,4 @@
+from uuid import UUID
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,9 +31,9 @@ async def create_item(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/{company_id}/get-items", status_code=status.HTTP_200_OK)
+@router.get("/{company_id}/get-company-items", status_code=status.HTTP_200_OK)
 async def get_items(
-    company_id: str,
+    company_id: UUID,
     limit: int | None = None,
     skip: int | None = None,
     current_user: User = Depends(get_current_user),
@@ -40,10 +41,9 @@ async def get_items(
 ) -> list[CreateItemReturnSchema]:
     try:
         return await item_service.get_all_items(
-            company_id=company_id,
             limit=limit,
             skip=skip,
-            current_user=current_user,
+            company_id=company_id,
             db=db,
         )
     except Exception as e:

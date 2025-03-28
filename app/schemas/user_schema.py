@@ -51,14 +51,6 @@ class EventReservationEnum(str, Enum):
     CANCELLED = "cancelled"
 
 
-class OrderStatusEnum(str, Enum):
-    NEW = "New"
-    IN_PROGRESS = "In progress"
-    READY = "Ready"
-    COMPLETED = "Completed"
-    CANCELLED = "cancelled"
-
-
 class AttendanceStatusEnum(str, Enum):
     PRESENT = "present"
     LATE = "late"
@@ -85,6 +77,7 @@ class ResourceEnum(str, Enum):
     PERMISSIONS = "permissions"
     DEPARTMENTS = "departments"
     OUTLETS = "outlets"
+    RATE = 'rate'
 
 
 class ActionEnum(str, Enum):
@@ -119,13 +112,16 @@ class UserCreate(UserBase):
     def validate_password(cls, data: str):
         # Check if password meets requirements
         if not re.search(r"[A-Z]", data):
-            raise ValueError("Password must contain at least one uppercase letter")
+            raise ValueError(
+                "Password must contain at least one uppercase letter")
         if not re.search(r"[a-z]", data):
-            raise ValueError("Password must contain at least one lowercase letter")
+            raise ValueError(
+                "Password must contain at least one lowercase letter")
         if not re.search(r"\d", data):
             raise ValueError("Password must contain at least one digit")
         if not re.search(r'[!@#$%^&*(),.?":{}|<>]', data):
-            raise ValueError("Password must contain at least one special character")
+            raise ValueError(
+                "Password must contain at least one special character")
         return data
 
 
@@ -198,7 +194,7 @@ class TokenResponse(BaseModel):
 
 
 class UserResponse(UserBase):
-    id: str
+    id: UUID
     is_active: bool
     is_superuser: bool
     created_at: datetime
@@ -242,7 +238,7 @@ class NoPostCreate(BaseModel):
 
 
 class NoPostResponse(NoPostCreate):
-    company_id: str
+    company_id: UUID
 
 
 class PermissionResponse(Permission):

@@ -11,10 +11,9 @@ from app.config.config import settings
 
 engine = create_async_engine(settings.DATABASE_URL, echo=settings.DEBUG)
 AsyncSessionLocal = async_sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
+    bind=engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
 )
 
-session = AsyncSessionLocal()
 
 
 class Base(AsyncAttrs, DeclarativeBase):
@@ -22,7 +21,7 @@ class Base(AsyncAttrs, DeclarativeBase):
 
 
 async def get_db():
-    async with AsyncSessionLocal() as db:  # Use async with to manage the session context
+    async with AsyncSessionLocal() as db:
         try:
             yield db
         finally:

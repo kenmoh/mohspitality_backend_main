@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 from select import select
 import requests
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,8 +43,7 @@ async def create_subscription(
         subscription = Subscription(
             user_id=current_user.id,
             plan_name=data.plan_name,
-            start_date=data.start_date,
-            end_date=datetime.now() + datetime.timedelta(days=duration),
+            end_date=datetime.today() + datetime.timedelta(days=duration),
             amount=amount,
         )
 
@@ -57,7 +56,7 @@ async def create_subscription(
             subscription=subscription, current_user=current_user
         )
 
-        return SubscriptionResponse(**subscription.__dict__)
+        return subscription
     except Exception as e:
         raise e
 
@@ -108,12 +107,14 @@ async def update_company_subscription(
         raise Exception("No subscription exists for this company")
 
     # Update the company subscription details
-    company_subscription.plan_name = data.plan_name  # Example of updating the plan
-    # Add other fields as necessary
+    company_subscription.plan_name = data.plan_name
 
     # Save changes
     await db.commit()
     await db.refresh(company_subscription)
+
+    company_subscription.payment_link = get_subscription_payment_link(
+        company_subscription)
 
     # Update all staff subscriptions
     await update_staff_subscriptions(db=db, current_user=current_user)

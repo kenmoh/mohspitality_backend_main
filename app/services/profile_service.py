@@ -1,4 +1,5 @@
 import datetime
+from os import name
 import re
 from uuid import UUID
 from fastapi import HTTPException, status
@@ -14,6 +15,7 @@ from app.models.models import (
     UserProfile,
     CompanyProfile,
     User,
+    Rate
 
 )
 
@@ -26,7 +28,7 @@ from app.schemas.profile_schema import (
     UpdateCompanyPaymentGateway,
     UpdateCompanyProfile,
 )
-from app.schemas.room_schema import NoPostCreate, NoPostResponse
+from app.schemas.room_schema import NoPostCreate, NoPostResponse, RatetCreate, RatetResponse
 from app.schemas.user_schema import (
     ActionEnum,
     AddPermissionsToRole,
@@ -911,6 +913,68 @@ async def delete_company_outlet(
 
     # Delete the outlet
     await db.delete(outlet)
+    await db.commit()
+
+    return None
+
+
+async def create_rate(
+    data: RatetCreate, current_user: User, db: AsyncSession
+) -> RatetResponse:
+
+    await check_permission(user=current_user, required_permission='create_rate')
+    company_id = (
+        current_user.id
+        if current_user.user_type == UserType.COMPANY
+        else current_user.company_id
+    )
+    try:
+        # Create a new rate
+        rate = Rate(
+            name=data.name,
+            pay_type=data.pay_type,
+            rate_amount=data.rate_amount,
+            company_id=company_id
+
+        )
+
+        db.add(rate)
+        await db.commit()
+        await db.refresh(rate)
+
+        return rate
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+async def delete_company_rate(
+    rate_id: int, current_user: User, db: AsyncSession
+) -> None:
+    # Check permission
+    await check_permission(current_user, required_permission="delete_rate")
+
+    # Determine company ID
+    company_id = (
+        current_user.id
+        if current_user.user_type == UserType.COMPANY
+        else current_user.company_id
+    )
+
+    # Find the rate
+    stmt = select(Outlet).where(Rate.id == rate_id).where(
+        Rate.company_id == company_id)
+    result = await db.execute(stmt)
+    rate = result.scalar_one_or_none()
+
+    # Check if rate exists
+    if not rate:
+        raise HTTPException(
+            status_code=404, detail=f"Rate with ID {rate_id} not found"
+        )
+
+    # Delete the rate
+    await db.delete(rate)
     await db.commit()
 
     return None

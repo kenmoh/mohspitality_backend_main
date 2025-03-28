@@ -34,3 +34,6 @@ class CreateItemReturnSchema(CreateItemSchema):
     id: int
     quantity: int
     stocks: list[ItemStockReturnSchema]
+
+    class Config:
+        from_attributes = True

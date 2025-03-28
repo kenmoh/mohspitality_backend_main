@@ -13,7 +13,7 @@ from app.schemas.profile_schema import (
     UpdateCompanyPaymentGateway,
     UpdateCompanyProfile,
 )
-from app.schemas.room_schema import NoPostCreate, NoPostResponse
+from app.schemas.room_schema import NoPostCreate, NoPostResponse, RatetCreate, RatetResponse
 from app.schemas.user_schema import (
     AddPermissionsToRole,
     AssignRoleToStaff,
@@ -314,6 +314,37 @@ async def get_company_outlets(
         return await profile_service.get_company_outlets(
             db=db,
             current_user=current_user,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ============== RATE =================
+@router.post("/company-create-rate", status_code=status.HTTP_201_CREATED)
+async def create_company_rate(
+    data: RatetCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RatetResponse:
+    try:
+        return await profile_service.create_rate(
+            db=db, data=data, current_user=current_user
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post("/{rate_id}/company-delete-rate", status_code=status.HTTP_204_NO_CONTENT)
+async def create_company_rate(
+    rate_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    try:
+        return await profile_service.delete_company_rate(
+            db=db, current_user=current_user, rate_id=rate_id
         )
     except Exception as e:
         raise HTTPException(

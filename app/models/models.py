@@ -14,20 +14,17 @@ from sqlalchemy.orm import mapped_column, Mapped, relationship
 
 
 from app.schemas.item_schema import ItemCategory
+from app.schemas.order_schema import OrderStatusEnum
 from app.schemas.room_schema import OutletType
 from app.schemas.subscriptions import SubscriptionStatus, SubscriptionType
 from app.schemas.user_schema import CurencySymbol, PayType, PaymentGatwayEnum, UserType
-
-
-def user_unique_id():
-    return str(uuid.uuid1()).replace("-", "")
 
 
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, nullable=False, index=True)
+        primary_key=True, default=uuid.uuid1, nullable=False, index=True)
     email: Mapped[str] = mapped_column(nullable=False, unique=True)
     user_type: Mapped[UserType] = mapped_column(nullable=False)
     password: Mapped[str] = mapped_column(nullable=False)
@@ -74,14 +71,18 @@ class User(Base):
     qrcodes = relationship("QRCode", back_populates="user")
     departments = relationship("Department", back_populates="user")
     outlets = relationship("Outlet", back_populates="user")
+    rates = relationship("Rate", back_populates="user")
+    attendance = relationship("Outlet", back_populates="user")
     no_post_list = relationship("NoPost", back_populates="user")
+    orders: Mapped[list["Order"]] = relationship(
+        "Order", back_populates="user")
 
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, nullable=False, index=True)
+        primary_key=True, default=uuid.uuid1, nullable=False, index=True)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     plan_name: Mapped[SubscriptionType] = mapped_column(
         default=SubscriptionType.TRIAL)
@@ -102,7 +103,7 @@ class Subscription(Base):
 class UserProfile(Base):
     __tablename__ = "user_profiles"
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, nullable=False, index=True)
+        primary_key=True, default=uuid.uuid1, nullable=False, index=True)
     full_name: Mapped[str] = mapped_column()
     phone_number: Mapped[str] = mapped_column(unique=True)
     department: Mapped[str] = mapped_column(nullable=True)
@@ -117,7 +118,7 @@ class UserProfile(Base):
 class CompanyProfile(Base):
     __tablename__ = "company_profiles"
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, nullable=False, index=True)
+        primary_key=True, default=uuid.uuid1, nullable=False, index=True)
 
     company_name: Mapped[str] = mapped_column(unique=True)
     address: Mapped[str] = mapped_column()
@@ -258,7 +259,7 @@ class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, nullable=False, index=True)
+        primary_key=True, nullable=False, default=uuid.uuid1, index=True)
     token: Mapped[str] = mapped_column(unique=True, index=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
@@ -279,7 +280,7 @@ class PasswordReset(Base):
     __tablename__ = "password_resets"
 
     id: Mapped[UUID] = mapped_column(
-        primary_key=True, nullable=False, index=True)
+        primary_key=True, default=uuid.uuid1, nullable=False, index=True)
     token: Mapped[str] = mapped_column(unique=True, index=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
@@ -365,7 +366,7 @@ class Rate(Base):
     __tablename__ = "rates"
 
     id: Mapped[int] = mapped_column(
-        primary_key=True, nullable=False, autoincrement=True
+        primary_key=True,  nullable=False, autoincrement=True
     )
     company_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
@@ -377,6 +378,9 @@ class Rate(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    user = relationship("User", back_populates="rates")
+    __table_args__ = (UniqueConstraint(
+        "name", "company_id", name="rate_name"),)
 
 
 class AttendanceQRCode(Base):
@@ -404,9 +408,10 @@ class StaffAttendance(Base):
     id: Mapped[int] = mapped_column(
         primary_key=True, nullable=False, autoincrement=True
     )
-    company_id: Mapped[UUID] = mapped_column(
+    staff_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    company_id: Mapped[UUID]
     full_name: Mapped[str] = mapped_column(nullable=True)
     check_in: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -414,6 +419,7 @@ class StaffAttendance(Base):
     check_out: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    user = relationship("User", back_populates="attendance")
 
 
 class NavItem(Base):
@@ -475,13 +481,74 @@ class Item(Base):
         "ItemStock", back_populates="item", cascade="all, delete"
     )
 
+    # Relationships
+    order_items = relationship("OrderItem", back_populates="item")
 
-# class Association(Base):
-#     __tablename__ = "association_table"
-#     left_id: Mapped[int] = mapped_column(
-#         ForeignKey("left_table.id"), primary_key=True)
-#     right_id: Mapped[int] = mapped_column(
-#         ForeignKey("right_table.id"), primary_key=True
-#     )
-#     child: Mapped["Child"] = relationship(back_populates="parents")
-#     parent: Mapped["Parent"] = relationship(back_populates="children")
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid.uuid1, index=True)
+    guest_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    outlet_id: Mapped[int]
+    company_id: Mapped[UUID]
+    guest_name_or_email: Mapped[str]
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    status: Mapped[OrderStatusEnum] = mapped_column(
+        nullable=False, default=OrderStatusEnum.NEW)
+    total_amount: Mapped[Decimal] = mapped_column(nullable=False, default=0.0)
+    payment_link: Mapped[str] = mapped_column(nullable=True)
+
+    order_items: Mapped[list["OrderItem"]] = relationship(
+        "OrderItem", back_populates="order", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    user = relationship("User", back_populates="orders", lazy="selectin")
+    splits: Mapped[list["OrderSplit"]] = relationship(
+        "OrderSplit", back_populates="order", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, index=True, default=uuid.uuid1,)
+    order_id: Mapped[UUID] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
+    )
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("items.id", ondelete="CASCADE"), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(nullable=False)
+    price: Mapped[Decimal] = mapped_column(nullable=False)
+
+    order = relationship("Order", back_populates="order_items")
+    item = relationship("Item", back_populates="order_items")
+
+
+class OrderSplit(Base):
+    __tablename__ = "order_splits"
+
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid.uuid1, index=True)
+    order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey(
+        "orders.id", ondelete="CASCADE"), nullable=False)
+    label: Mapped[str] = mapped_column(nullable=False)
+    payment_link: Mapped[str] = mapped_column(nullable=True)
+    # split_type can be either "amount" or "percent"
+    split_type: Mapped[str] = mapped_column(nullable=False)
+    # For "amount", value is the fixed monetary amount; for "percent", it is the percentage (e.g., 25 for 25%)
+    value: Mapped[Decimal] = mapped_column(nullable=False)
+    # Allocated is the computed amount for this split (after validating/splitting)
+    allocated_amount: Mapped[Decimal] = mapped_column(
+        nullable=False, default=Decimal("0.00"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default="now()")
+
+    order = relationship("Order", back_populates="splits")

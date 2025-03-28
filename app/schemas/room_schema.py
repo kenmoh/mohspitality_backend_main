@@ -1,7 +1,10 @@
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 from uuid import UUID
 from pydantic import BaseModel
+
+from app.schemas.user_schema import PayType
 
 
 class OutletType(str, Enum):
@@ -11,6 +14,17 @@ class OutletType(str, Enum):
 
 class NoPostCreate(BaseModel):
     no_post_list: str
+
+
+class RatetCreate(BaseModel):
+    name: str
+    pay_type: PayType
+    rate_amount: Decimal
+
+
+class RatetResponse(RatetCreate):
+    id: int
+    company_id: UUID
 
 
 class NoPostResponse(NoPostCreate):
