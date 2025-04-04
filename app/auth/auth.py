@@ -28,8 +28,7 @@ async def create_refresh_token(user_id: str, db: AsyncSession) -> str:
     token = str(uuid.uuid4())
     expires_at = datetime.now() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
-    refresh_token = RefreshToken(
-        token=token, user_id=user_id, expires_at=expires_at)
+    refresh_token = RefreshToken(token=token, user_id=user_id, expires_at=expires_at)
 
     db.add(refresh_token)
     await db.commit()

@@ -101,8 +101,7 @@ async def update_item_item_by_id(
     )
     result = await db.execute(stmt)
 
-    redis_client.set(cache_key, json.dumps(
-        result, default=str), ex=settings.REDIS_EX)
+    redis_client.set(cache_key, json.dumps(result, default=str), ex=settings.REDIS_EX)
 
     await db.commit()
     return await result.scalar_one_or_none()
@@ -132,11 +131,13 @@ async def get_all_items(
         .limit(limit)
     )
     items = result.unique().scalars().all()
-    items_data = [CreateItemReturnSchema.model_validate(
-        item).model_dump() for item in items]
+    items_data = [
+        CreateItemReturnSchema.model_validate(item).model_dump() for item in items
+    ]
 
-    redis_client.set(cache_key, json.dumps(
-        items_data, default=str), ex=settings.REDIS_EX)
+    redis_client.set(
+        cache_key, json.dumps(items_data, default=str), ex=settings.REDIS_EX
+    )
     return items_data
 
 
@@ -150,8 +151,7 @@ async def delete_item_by_id(db: AsyncSession, item_id: int, current_user: User) 
         if current_user.user_type == UserType.COMPANY
         else current_user.company_id
     )
-    stmt = delete(Item).where(Item.id == item_id &
-                              Item.company_id == company_id)
+    stmt = delete(Item).where(Item.id == item_id & Item.company_id == company_id)
     await db.execute(stmt)
     await db.commit()
     return None
@@ -231,8 +231,7 @@ async def update_stock(
     item = item_result.scalar_one_or_none()
 
     if not item:
-        raise Exception(
-            f"Associated item with ID {existing_stock.item_id} not found")
+        raise Exception(f"Associated item with ID {existing_stock.item_id} not found")
 
     try:
         # Remove existing stock quantity from item quantity

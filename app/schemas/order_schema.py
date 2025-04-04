@@ -13,6 +13,13 @@ class OrderStatusEnum(str, Enum):
     CANCELLED = "cancelled"
 
 
+class PaymentStatus(str, Enum):
+    PENDIND = "pending"
+    PAID = "paid"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class BillSplit(BaseModel):
     label: str
     split_type: Literal["amount", "percent"]
@@ -29,7 +36,7 @@ class OrderItemCreate(BaseModel):
 
 class OrderCreate(BaseModel):
     company_id: UUID
-    outlet_id: int
+    # outlet_id: int
     room_or_table_number: str
     items: list[OrderItemCreate]
 
@@ -52,11 +59,12 @@ class OrderItemResponse(BaseModel):
 
 
 class OrderResponse(BaseModel):
-    id: int
+    id: UUID
     outlet_id: int
     guest_id: UUID
     status: str
-    total: Decimal
+    total_amount: Decimal
     room_or_table_number: str
-    payment_url: str | None = None
+    payment_url: str
+    notes: str | None = None
     order_items: list[OrderItemResponse]

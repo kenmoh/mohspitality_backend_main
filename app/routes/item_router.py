@@ -27,8 +27,7 @@ async def create_item(
             data=data, current_user=current_user, db=db
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/{company_id}/get-company-items", status_code=status.HTTP_200_OK)
@@ -47,8 +46,7 @@ async def get_items(
             db=db,
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/{item_id}/item-details", status_code=status.HTTP_200_OK)
@@ -62,8 +60,7 @@ async def item_details(
             item_id=item_id, current_user=current_user, db=db
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.delete("/{item_id}/get-items", status_code=status.HTTP_204_NO_CONTENT)
@@ -77,8 +74,7 @@ async def get_item(
             item_id=item_id, current_user=current_user, db=db
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/{item_id}/stocks", status_code=status.HTTP_201_CREATED)
@@ -93,8 +89,7 @@ async def add_new_stock(
             item_id=item_id, stock=stock, current_user=current_user, db=db
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/{stock_id}/update-stock", status_code=status.HTTP_202_ACCEPTED)
@@ -109,5 +104,4 @@ async def update_stock(
             stock_id=stock_id, stock=stock, current_user=current_user, db=db
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

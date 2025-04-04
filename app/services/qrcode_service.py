@@ -76,8 +76,7 @@ async def create_qrcode(
         else current_user.company_id
     )
 
-    rooms_list = [room.strip()
-                  for room in qrcode_data.room_or_table_numbers.split(",")]
+    rooms_list = [room.strip() for room in qrcode_data.room_or_table_numbers.split(",")]
     rooms_set = set(rooms_list)
     unique_rooms = list(rooms_set)
 
@@ -88,16 +87,14 @@ async def create_qrcode(
 
     # Check limit for this subscription type
     limit_record = await db.execute(
-        select(QRCodeLimit).where(
-            QRCodeLimit.subscription_type == subscription_type)
+        select(QRCodeLimit).where(QRCodeLimit.subscription_type == subscription_type)
     )
     limit = limit_record.scalar_one_or_none()
 
     max_qrcodes = limit.max_qrcodes
 
     # Count existing QR codes for this company
-    count_query = select(func.count(QRCode.id)).where(
-        QRCode.company_id == company_id)
+    count_query = select(func.count(QRCode.id)).where(QRCode.company_id == company_id)
     result = await db.execute(count_query)
     current_count = result.scalar_one()
 

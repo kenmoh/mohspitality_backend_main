@@ -114,7 +114,8 @@ async def update_company_subscription(
     await db.refresh(company_subscription)
 
     company_subscription.payment_link = get_subscription_payment_link(
-        company_subscription)
+        company_subscription
+    )
 
     # Update all staff subscriptions
     await update_staff_subscriptions(db=db, current_user=current_user)

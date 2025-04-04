@@ -31,8 +31,7 @@ async def login_user(
         return await create_tokens(user_id=user.id, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/register-guest", status_code=status.HTTP_201_CREATED)
@@ -43,8 +42,7 @@ async def register_user(
         return await auth_service.create_guest_user(user_data=user_data, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/register-company", status_code=status.HTTP_201_CREATED)
@@ -55,8 +53,7 @@ async def register_user(
         return await auth_service.create_company_user(user_data=user_data, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/register-staff", status_code=status.HTTP_201_CREATED)
@@ -71,11 +68,14 @@ async def register_user(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/register-super-admin", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post(
+    "/register-super-admin",
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 async def register_user(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db),
@@ -84,11 +84,14 @@ async def register_user(
         return await auth_service.create_super_admin_user(user_data=user_data, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/register-admin-staff", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post(
+    "/register-admin-staff",
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 async def register_admin_user(
     user_data: UserCreate,
     current_user: User = Depends(get_current_user),
@@ -100,8 +103,7 @@ async def register_admin_user(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/update-user", status_code=status.HTTP_202_ACCEPTED)
@@ -116,8 +118,7 @@ async def update_user(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/update-password", status_code=status.HTTP_202_ACCEPTED)
@@ -132,8 +133,7 @@ async def update_password(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/request-password-reset", status_code=status.HTTP_200_OK)
@@ -148,8 +148,7 @@ async def request_password_reset(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/confirm-password-reset", status_code=status.HTTP_200_OK)
@@ -161,5 +160,4 @@ async def confirm_password_reset(
         return await auth_service.confirm_password_reset(reset_request=data, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

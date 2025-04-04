@@ -1,5 +1,4 @@
-import datetime
-from os import name
+from datetime import datetime
 import re
 from uuid import UUID
 from fastapi import HTTPException, status
@@ -15,8 +14,7 @@ from app.models.models import (
     UserProfile,
     CompanyProfile,
     User,
-    Rate
-
+    Rate,
 )
 
 from app.schemas.profile_schema import (
@@ -28,7 +26,12 @@ from app.schemas.profile_schema import (
     UpdateCompanyPaymentGateway,
     UpdateCompanyProfile,
 )
-from app.schemas.room_schema import NoPostCreate, NoPostResponse, RatetCreate, RatetResponse
+from app.schemas.room_schema import (
+    NoPostCreate,
+    NoPostResponse,
+    RatetCreate,
+    RatetResponse,
+)
 from app.schemas.user_schema import (
     ActionEnum,
     AddPermissionsToRole,
@@ -465,8 +468,7 @@ async def update_company_profile(
     db: AsyncSession, data: UpdateCompanyProfile, current_user: User
 ) -> CreateCompanyProfileResponse:
     # Get the profile
-    stmt = select(CompanyProfile).where(
-        CompanyProfile.company_id == current_user.id)
+    stmt = select(CompanyProfile).where(CompanyProfile.company_id == current_user.id)
     result = await db.execute(stmt)
     company_profile = result.scalar_one_or_none()
 
@@ -499,8 +501,7 @@ async def update_company_payment_gateway(
     db: AsyncSession, data: UpdateCompanyPaymentGateway, current_user: User
 ) -> MessageResponse:
     # Get the profile
-    stmt = select(CompanyProfile).where(
-        CompanyProfile.company_id == current_user.id)
+    stmt = select(CompanyProfile).where(CompanyProfile.company_id == current_user.id)
     result = await db.execute(stmt)
     company_profile = result.scalar_one_or_none()
 
@@ -693,8 +694,7 @@ async def get_company_staff_role(
     role_id: int, db: AsyncSession, current_user: User
 ) -> RoleCreateResponse:
     result = await db.execute(
-        select(Role).where(Role.company_id ==
-                           current_user.id, Role.id == role_id)
+        select(Role).where(Role.company_id == current_user.id, Role.id == role_id)
     )
     return result.scalar_one_or_none()
 
@@ -768,8 +768,7 @@ async def delete_company_department(
 
     # Find the department
     stmt = select(Department).where(
-        (Department.company_id == company_id) & (
-            Department.id == department_id)
+        (Department.company_id == company_id) & (Department.id == department_id)
     )
     result = await db.execute(stmt)
     department = result.scalar_one_or_none()
@@ -921,8 +920,7 @@ async def delete_company_outlet(
 async def create_rate(
     data: RatetCreate, current_user: User, db: AsyncSession
 ) -> RatetResponse:
-
-    await check_permission(user=current_user, required_permission='create_rate')
+    # await check_permission(user=current_user, required_permission='create_rate')
     company_id = (
         current_user.id
         if current_user.user_type == UserType.COMPANY
@@ -934,8 +932,7 @@ async def create_rate(
             name=data.name,
             pay_type=data.pay_type,
             rate_amount=data.rate_amount,
-            company_id=company_id
-
+            company_id=company_id,
         )
 
         db.add(rate)
@@ -944,8 +941,25 @@ async def create_rate(
 
         return rate
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+async def get_company_rates(
+    current_user: User, db: AsyncSession
+) -> list[RatetResponse]:
+    # Determine company ID
+    company_id = (
+        current_user.id
+        if current_user.user_type == UserType.COMPANY
+        else current_user.company_id
+    )
+
+    # Find company rates
+    stmt = select(Rate).where((Rate.company_id == company_id))
+    result = await db.execute(stmt)
+    company_rates = result.all()
+
+    return company_rates
 
 
 async def delete_company_rate(
@@ -962,16 +976,13 @@ async def delete_company_rate(
     )
 
     # Find the rate
-    stmt = select(Outlet).where(Rate.id == rate_id).where(
-        Rate.company_id == company_id)
+    stmt = select(Outlet).where(Rate.id == rate_id).where(Rate.company_id == company_id)
     result = await db.execute(stmt)
     rate = result.scalar_one_or_none()
 
     # Check if rate exists
     if not rate:
-        raise HTTPException(
-            status_code=404, detail=f"Rate with ID {rate_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Rate with ID {rate_id} not found")
 
     # Delete the rate
     await db.delete(rate)

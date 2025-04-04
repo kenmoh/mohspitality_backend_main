@@ -29,16 +29,26 @@ from app.services.qrcode_service import initialize_qr_code_limits
 #     finally:
 #         await db.close()
 
+
+# @asynccontextmanager
+# async def lifespan(application: FastAPI):
+#     async with AsyncSessionLocal() as db:
+#         try:
+#             await pre_create_permissions(db)
+#             await initialize_qr_code_limits(db)
+#             # await setup_company_roles(db)
+#             yield {"db": db, "redis": redis_client}
+#         finally:
+#             await db.close()
+
+
 @asynccontextmanager
-async def lifespan(application: FastAPI):
+async def lifespan(app: FastAPI):
+    # Just do your initialization with a new session
     async with AsyncSessionLocal() as db:
-        try:
-            await pre_create_permissions(db)
-            await initialize_qr_code_limits(db)
-            # await setup_company_roles(db)
-            yield {"db": db, "redis": redis_client}
-        finally:
-            await db.close()
+        await pre_create_permissions(db)
+        await initialize_qr_code_limits(db)
+    yield
 
 
 app = FastAPI(

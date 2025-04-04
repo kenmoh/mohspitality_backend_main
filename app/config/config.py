@@ -9,7 +9,14 @@ load_dotenv()
 class Settings(BaseSettings):
     # Application settings
     APP_NAME: str = "MOHospitality"
-    DEBUG: bool = os.getenv("DEBUG", "False") == "True"
+    DEBUG: bool = os.getenv("DEBUG", False) == True
+
+    # Astra
+    # KEY_SPACE: str = os.getenv("KEY_SPACE")
+    # ASTRA_DB_CLIENT_ID: str = os.getenv("ASTRA_DB_CLIENT_ID")
+    # ASTRA_DB_CLIENT_SECRET: str = os.getenv("ASTRA_DB_CLIENT_SECRET")
+    # ASTRA_TOKEN: str = os.getenv("ASTRA_TOKEN")
+    # ASTRA_API: str =  os.getenv("ASTRA_API")
 
     # Database settings
     DATABASE_URL: str = os.getenv(
