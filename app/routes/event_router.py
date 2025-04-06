@@ -14,15 +14,14 @@ from app.schemas.event_schema import (
     EventMenuItemResponse,
     EventMenuItemUpdate,
     EventStatus,
+    MeetingRoomCreate,
+    MeetingRoomResponse,
+    MeetingRoomUpdate,
     SeatArrangementCreate,
     SeatArrangementResponse,
     SeatArrangementUpdate,
 )
-from app.schemas.room_schema import (
-    MeetingRoomCreate,
-    MeetingRoomResponse,
-    MeetingRoomUpdate,
-)
+
 from app.services import event_service
 
 
@@ -80,6 +79,7 @@ async def delete_meeting_room(
 ):
     await event_service.delete_meeting_room(room_id, db, current_user)
 
+
 # Seat Arrangement Routes
 
 
@@ -89,7 +89,9 @@ async def create_seat_arrangement(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SeatArrangementResponse:
-    return await event_service.create_seat_arrangement(arrangement_data, db, current_user)
+    return await event_service.create_seat_arrangement(
+        arrangement_data, db, current_user
+    )
 
 
 @router.get("/{arrangement_id}/arrangements", status_code=status.HTTP_200_OK)
@@ -133,6 +135,7 @@ async def delete_seat_arrangement(
     db: AsyncSession = Depends(get_db),
 ):
     await event_service.delete_seat_arrangement(arrangement_id, db, current_user)
+
 
 # Event Menu Item Routes
 
@@ -187,6 +190,7 @@ async def delete_menu_item(
 ):
     await event_service.delete_menu_item(item_id, db, current_user)
 
+
 # Event Booking Routes
 
 
@@ -226,7 +230,9 @@ async def update_event_booking(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> EventBookingResponse:
-    return await event_service.update_event_booking(booking_id, booking_data, db, current_user)
+    return await event_service.update_event_booking(
+        booking_id, booking_data, db, current_user
+    )
 
 
 @router.post("/bookings/{booking_id}/cancel", status_code=status.HTTP_200_OK)

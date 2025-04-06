@@ -11,6 +11,7 @@ from app.routes import (
     auth_router,
     event_router,
     qrcode_router,
+    reservation_router,
     user_router,
     item_router,
     order_router,
@@ -71,3 +72,4 @@ app.include_router(qrcode_router.router)
 app.include_router(item_router.router)
 app.include_router(order_router.router)
 app.include_router(event_router.router)
+app.include_router(reservation_router.router)

@@ -191,8 +191,7 @@ async def reservation_details(
         )
     )
     reservation = result.scalar_one_or_none()
-    reservations_data = ReservationCreate.model_validate(
-        reservation).model_dump()
+    reservations_data = ReservationCreate.model_validate(reservation).model_dump()
 
     redis_client.set(
         cache_key, json.dumps(reservations_data, default=str), ex=settings.REDIS_EX
@@ -211,8 +210,7 @@ async def update_reservation(
     user_id = check_current_user_id(current_user)
     query = select(Reservation).where(
         Reservation.id == reservation_id,
-        (Reservation.guest_id == user_id) | (
-            Reservation.company_id == user_id),
+        (Reservation.guest_id == user_id) | (Reservation.company_id == user_id),
     )
     result = await db.execute(query)
     reservation = result.scalar_one_or_none()

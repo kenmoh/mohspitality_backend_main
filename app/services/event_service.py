@@ -2,31 +2,46 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.models import EventBooking, EventMenuItem, MeetingRoom, SeatArrangement, User
-from app.schemas.event_schema import EventBookingCreate, EventBookingResponse, EventBookingUpdate, EventMenuItemCreate, EventMenuItemResponse, EventMenuItemUpdate, EventStatus, SeatArrangementCreate, SeatArrangementResponse, SeatArrangementUpdate
-from app.schemas.room_schema import MeetingRoomCreate, MeetingRoomResponse, MeetingRoomUpdate
+from app.models.models import (
+    EventBooking,
+    EventMenuItem,
+    MeetingRoom,
+    SeatArrangement,
+    User,
+)
+from app.schemas.event_schema import (
+    EventBookingCreate,
+    EventBookingResponse,
+    EventBookingUpdate,
+    EventMenuItemCreate,
+    EventMenuItemResponse,
+    EventMenuItemUpdate,
+    EventStatus,
+    MeetingRoomCreate,
+    MeetingRoomResponse,
+    MeetingRoomUpdate,
+    SeatArrangementCreate,
+    SeatArrangementResponse,
+    SeatArrangementUpdate,
+)
+
 from app.schemas.user_schema import UserType
 from app.config.config import settings, redis_client
 
 
 async def create_meeting_room(
-    room_data: MeetingRoomCreate,
-    db: AsyncSession,
-    current_user: User
+    room_data: MeetingRoomCreate, db: AsyncSession, current_user: User
 ) -> MeetingRoomResponse:
     """Create a new meeting room. Only company users can create rooms."""
 
     if current_user.user_type == UserType.GUEST:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only company users can create meeting rooms"
+            detail="Only company users can create meeting rooms",
         )
 
     try:
-        new_room = MeetingRoom(
-            company_id=current_user.id,
-            **room_data.model_dump()
-        )
+        new_room = MeetingRoom(company_id=current_user.id, **room_data.model_dump())
 
         db.add(new_room)
         await db.commit()
@@ -38,14 +53,12 @@ async def create_meeting_room(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to create meeting room: {str(e)}"
+            detail=f"Failed to create meeting room: {str(e)}",
         )
 
 
 async def get_meeting_room(
-    room_id: int,
-    db: AsyncSession,
-    current_user: User
+    room_id: int, db: AsyncSession, current_user: User
 ) -> MeetingRoomResponse:
     """Get a single meeting room by ID."""
     query = select(MeetingRoom).where(MeetingRoom.id == room_id)
@@ -54,8 +67,7 @@ async def get_meeting_room(
 
     if not room:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meeting room not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting room not found"
         )
 
     return MeetingRoomResponse.model_validate(room)
@@ -66,7 +78,7 @@ async def get_company_meeting_rooms(
     current_user: User,
     skip: int = 0,
     limit: int = 20,
-    is_available: bool = None
+    is_available: bool = None,
 ) -> list[MeetingRoomResponse]:
     """Get all meeting rooms for a company with optional filtering."""
     # Check cache first
@@ -76,9 +88,12 @@ async def get_company_meeting_rooms(
     if cached_data:
         return [MeetingRoomResponse.model_validate(item) for item in cached_data]
 
-    query = select(MeetingRoom).where(
-        MeetingRoom.company_id == current_user.id
-    ).offset(skip).limit(limit)
+    query = (
+        select(MeetingRoom)
+        .where(MeetingRoom.company_id == current_user.id)
+        .offset(skip)
+        .limit(limit)
+    )
 
     if is_available is not None:
         query = query.where(MeetingRoom.is_available == is_available)
@@ -89,32 +104,25 @@ async def get_company_meeting_rooms(
     # Cache the results
     response = [MeetingRoomResponse.model_validate(r) for r in rooms]
     redis_client.set(
-        cache_key,
-        [r.model_dump() for r in response],
-        ex=settings.REDIS_EX
+        cache_key, [r.model_dump() for r in response], ex=settings.REDIS_EX
     )
 
     return response
 
 
 async def update_meeting_room(
-    room_id: int,
-    room_data: MeetingRoomUpdate,
-    db: AsyncSession,
-    current_user: User
+    room_id: int, room_data: MeetingRoomUpdate, db: AsyncSession, current_user: User
 ) -> MeetingRoomResponse:
     """Update an existing meeting room."""
     query = select(MeetingRoom).where(
-        MeetingRoom.id == room_id,
-        MeetingRoom.company_id == current_user.id
+        MeetingRoom.id == room_id, MeetingRoom.company_id == current_user.id
     )
     result = await db.execute(query)
     room = result.scalar_one_or_none()
 
     if not room:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meeting room not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting room not found"
         )
 
     # Update fields
@@ -134,27 +142,23 @@ async def update_meeting_room(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to update meeting room: {str(e)}"
+            detail=f"Failed to update meeting room: {str(e)}",
         )
 
 
 async def delete_meeting_room(
-    room_id: int,
-    db: AsyncSession,
-    current_user: User
+    room_id: int, db: AsyncSession, current_user: User
 ) -> None:
     """Delete a meeting room."""
     query = select(MeetingRoom).where(
-        MeetingRoom.id == room_id,
-        MeetingRoom.company_id == current_user.id
+        MeetingRoom.id == room_id, MeetingRoom.company_id == current_user.id
     )
     result = await db.execute(query)
     room = result.scalar_one_or_none()
 
     if not room:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Meeting room not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting room not found"
         )
 
     try:
@@ -168,27 +172,24 @@ async def delete_meeting_room(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to delete meeting room: {str(e)}"
+            detail=f"Failed to delete meeting room: {str(e)}",
         )
 
 
 async def create_seat_arrangement(
-    arrangement_data: SeatArrangementCreate,
-    db: AsyncSession,
-    current_user: User
+    arrangement_data: SeatArrangementCreate, db: AsyncSession, current_user: User
 ) -> SeatArrangementResponse:
     """Create a new seating arrangement. Only company users can create arrangements."""
 
     if current_user.user_type == UserType.GUEST:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only company users can create seating arrangements"
+            detail="Only company users can create seating arrangements",
         )
 
     try:
         new_arrangement = SeatArrangement(
-            company_id=current_user.id,
-            **arrangement_data.model_dump()
+            company_id=current_user.id, **arrangement_data.model_dump()
         )
 
         db.add(new_arrangement)
@@ -201,14 +202,12 @@ async def create_seat_arrangement(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to create seating arrangement: {str(e)}"
+            detail=f"Failed to create seating arrangement: {str(e)}",
         )
 
 
 async def get_seat_arrangement(
-    arrangement_id: int,
-    db: AsyncSession,
-    current_user: User
+    arrangement_id: int, db: AsyncSession, current_user: User
 ) -> SeatArrangementResponse:
     """Get a single seat arrangement by ID."""
     query = select(SeatArrangement).where(SeatArrangement.id == arrangement_id)
@@ -217,8 +216,7 @@ async def get_seat_arrangement(
 
     if not arrangement:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Seat arrangement not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Seat arrangement not found"
         )
 
     return SeatArrangementResponse.model_validate(arrangement)
@@ -229,7 +227,7 @@ async def get_company_seat_arrangements(
     current_user: User,
     skip: int = 0,
     limit: int = 20,
-    is_available: bool = None
+    is_available: bool = None,
 ) -> list[SeatArrangementResponse]:
     """Get all seat arrangements for a company with optional filtering."""
     cache_key = f"arrangements:company:{current_user.id}:skip:{skip}:limit:{limit}:available:{is_available}"
@@ -238,9 +236,12 @@ async def get_company_seat_arrangements(
     if cached_data:
         return [SeatArrangementResponse.model_validate(item) for item in cached_data]
 
-    query = select(SeatArrangement).where(
-        SeatArrangement.company_id == current_user.id
-    ).offset(skip).limit(limit)
+    query = (
+        select(SeatArrangement)
+        .where(SeatArrangement.company_id == current_user.id)
+        .offset(skip)
+        .limit(limit)
+    )
 
     if is_available is not None:
         query = query.where(SeatArrangement.is_available == is_available)
@@ -248,12 +249,11 @@ async def get_company_seat_arrangements(
     result = await db.execute(query)
     arrangements = result.scalars().all()
 
-    response = [SeatArrangementResponse.model_validate(
-        r) for r in arrangements]
+    response = [SeatArrangementResponse.model_validate(r) for r in arrangements]
 
-    redis_client.set(cache_key,
-                     [r.model_dump() for r in response],
-                     ex=settings.REDIS_EX)
+    redis_client.set(
+        cache_key, [r.model_dump() for r in response], ex=settings.REDIS_EX
+    )
 
     return response
 
@@ -262,20 +262,19 @@ async def update_seat_arrangement(
     arrangement_id: int,
     arrangement_data: SeatArrangementUpdate,
     db: AsyncSession,
-    current_user: User
+    current_user: User,
 ) -> SeatArrangementResponse:
     """Update an existing seat arrangement."""
     query = select(SeatArrangement).where(
         SeatArrangement.id == arrangement_id,
-        SeatArrangement.company_id == current_user.id
+        SeatArrangement.company_id == current_user.id,
     )
     result = await db.execute(query)
     arrangement = result.scalar_one_or_none()
 
     if not arrangement:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Seat arrangement not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Seat arrangement not found"
         )
 
     # Update fields
@@ -295,27 +294,24 @@ async def update_seat_arrangement(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to update seat arrangement: {str(e)}"
+            detail=f"Failed to update seat arrangement: {str(e)}",
         )
 
 
 async def delete_seat_arrangement(
-    arrangement_id: int,
-    db: AsyncSession,
-    current_user: User
+    arrangement_id: int, db: AsyncSession, current_user: User
 ) -> None:
     """Delete a seat arrangement."""
     query = select(SeatArrangement).where(
         SeatArrangement.id == arrangement_id,
-        SeatArrangement.company_id == current_user.id
+        SeatArrangement.company_id == current_user.id,
     )
     result = await db.execute(query)
     arrangement = result.scalar_one_or_none()
 
     if not arrangement:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Seat arrangement not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Seat arrangement not found"
         )
 
     try:
@@ -329,14 +325,12 @@ async def delete_seat_arrangement(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to delete seat arrangement: {str(e)}"
+            detail=f"Failed to delete seat arrangement: {str(e)}",
         )
 
 
 async def create_event_booking(
-    booking_data: EventBookingCreate,
-    db: AsyncSession,
-    current_user: User
+    booking_data: EventBookingCreate, db: AsyncSession, current_user: User
 ) -> EventBookingResponse:
     """
     Create a new event booking.
@@ -348,11 +342,15 @@ async def create_event_booking(
 
         new_booking = EventBooking(
             guest_id=None if is_company_created else current_user.id,
-            company_id=current_user.id if is_company_created else booking_data.company_id,
+            company_id=current_user.id
+            if is_company_created
+            else booking_data.company_id,
             guest_name=booking_data.guest_name if is_company_created else None,
             guest_email=booking_data.guest_email if is_company_created else None,
             guest_phone=booking_data.guest_phone if is_company_created else None,
-            **booking_data.model_dump(exclude={'guest_name', 'guest_email', 'guest_phone'})
+            **booking_data.model_dump(
+                exclude={"guest_name", "guest_email", "guest_phone"}
+            ),
         )
 
         # Add menu items if specified
@@ -374,30 +372,27 @@ async def create_event_booking(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to create event booking: {str(e)}"
+            detail=f"Failed to create event booking: {str(e)}",
         )
 
 
 async def get_event_booking(
-    booking_id: UUID,
-    db: AsyncSession,
-    current_user: User
+    booking_id: UUID, db: AsyncSession, current_user: User
 ) -> EventBookingResponse:
     """Get a single event booking by ID."""
     query = select(EventBooking).where(
         EventBooking.id == booking_id,
         or_(
             EventBooking.guest_id == current_user.id,
-            EventBooking.company_id == current_user.id
-        )
+            EventBooking.company_id == current_user.id,
+        ),
     )
     result = await db.execute(query)
     booking = result.scalar_one_or_none()
 
     if not booking:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Event booking not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event booking not found"
         )
 
     return EventBookingResponse.model_validate(booking)
@@ -408,21 +403,28 @@ async def get_bookings(
     current_user: User,
     skip: int = 0,
     limit: int = 20,
-    status: EventStatus = None
+    status: EventStatus = None,
 ) -> list[EventBookingResponse]:
     """Get all bookings for a user (either as guest or company)."""
-    cache_key = f"bookings:user:{current_user.id}:status:{status}:skip:{skip}:limit:{limit}"
+    cache_key = (
+        f"bookings:user:{current_user.id}:status:{status}:skip:{skip}:limit:{limit}"
+    )
     cached_data = redis_client.get(cache_key)
 
     if cached_data:
         return [EventBookingResponse.model_validate(item) for item in cached_data]
 
-    query = select(EventBooking).where(
-        or_(
-            EventBooking.guest_id == current_user.id,
-            EventBooking.company_id == current_user.id
+    query = (
+        select(EventBooking)
+        .where(
+            or_(
+                EventBooking.guest_id == current_user.id,
+                EventBooking.company_id == current_user.id,
+            )
         )
-    ).offset(skip).limit(limit)
+        .offset(skip)
+        .limit(limit)
+    )
 
     if status:
         query = query.where(EventBooking.status == status)
@@ -433,9 +435,8 @@ async def get_bookings(
     response = [EventBookingResponse.model_validate(b) for b in bookings]
 
     redis_client.set(
-        cache_key,
-        [r.model_dump() for r in response],
-        ex=settings.REDIS_EX)
+        cache_key, [r.model_dump() for r in response], ex=settings.REDIS_EX
+    )
 
     return response
 
@@ -444,35 +445,32 @@ async def update_event_booking(
     booking_id: UUID,
     booking_data: EventBookingUpdate,
     db: AsyncSession,
-    current_user: User
+    current_user: User,
 ) -> EventBookingResponse:
     """Update an existing event booking."""
     query = select(EventBooking).where(
         EventBooking.id == booking_id,
         or_(
             EventBooking.guest_id == current_user.id,
-            EventBooking.company_id == current_user.id
-        )
+            EventBooking.company_id == current_user.id,
+        ),
     )
     result = await db.execute(query)
     booking = result.scalar_one_or_none()
 
     if not booking:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Event booking not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event booking not found"
         )
 
     # Update fields
     update_data = booking_data.model_dump(exclude_unset=True)
 
     # Handle menu items separately if they're being updated
-    menu_item_ids = update_data.pop('menu_item_ids', None)
+    menu_item_ids = update_data.pop("menu_item_ids", None)
     if menu_item_ids is not None:
         menu_items = await db.execute(
-            select(EventMenuItem).where(
-                EventMenuItem.id.in_(menu_item_ids)
-            )
+            select(EventMenuItem).where(EventMenuItem.id.in_(menu_item_ids))
         )
         booking.menu_items = menu_items.scalars().all()
 
@@ -493,36 +491,33 @@ async def update_event_booking(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to update event booking: {str(e)}"
+            detail=f"Failed to update event booking: {str(e)}",
         )
 
 
 async def cancel_event_booking(
-    booking_id: UUID,
-    db: AsyncSession,
-    current_user: User
+    booking_id: UUID, db: AsyncSession, current_user: User
 ) -> EventBookingResponse:
     """Cancel an event booking."""
     query = select(EventBooking).where(
         EventBooking.id == booking_id,
         or_(
             EventBooking.guest_id == current_user.id,
-            EventBooking.company_id == current_user.id
-        )
+            EventBooking.company_id == current_user.id,
+        ),
     )
     result = await db.execute(query)
     booking = result.scalar_one_or_none()
 
     if not booking:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Event booking not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event booking not found"
         )
 
     if booking.status == EventStatus.CANCELLED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Booking is already cancelled"
+            detail="Booking is already cancelled",
         )
 
     booking.status = EventStatus.CANCELLED
@@ -540,28 +535,23 @@ async def cancel_event_booking(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to cancel event booking: {str(e)}"
+            detail=f"Failed to cancel event booking: {str(e)}",
         )
 
 
 async def create_menu_item(
-    item_data: EventMenuItemCreate,
-    db: AsyncSession,
-    current_user: User
+    item_data: EventMenuItemCreate, db: AsyncSession, current_user: User
 ) -> EventMenuItemResponse:
     """Create a new menu item. Only company users can create menu items."""
 
     if current_user.user_type != UserType.COMPANY:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only company users can create menu items"
+            detail="Only company users can create menu items",
         )
 
     try:
-        new_item = EventMenuItem(
-            company_id=current_user.id,
-            **item_data.model_dump()
-        )
+        new_item = EventMenuItem(company_id=current_user.id, **item_data.model_dump())
 
         db.add(new_item)
         await db.commit()
@@ -573,14 +563,12 @@ async def create_menu_item(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to create menu item: {str(e)}"
+            detail=f"Failed to create menu item: {str(e)}",
         )
 
 
 async def get_menu_item(
-    item_id: int,
-    db: AsyncSession,
-    current_user: User
+    item_id: int, db: AsyncSession, current_user: User
 ) -> EventMenuItemResponse:
     """Get a single menu item by ID."""
     query = select(EventMenuItem).where(EventMenuItem.id == item_id)
@@ -589,8 +577,7 @@ async def get_menu_item(
 
     if not item:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Menu item not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found"
         )
 
     return EventMenuItemResponse.model_validate(item)
@@ -602,7 +589,7 @@ async def get_company_menu_items(
     skip: int = 0,
     limit: int = 20,
     is_available: bool = None,
-    category: str = None
+    category: str = None,
 ) -> list[EventMenuItemResponse]:
     """Get all menu items for a company with optional filtering."""
     cache_key = f"menu:company:{current_user.id}:skip:{skip}:limit:{limit}:available:{is_available}:category:{category}"
@@ -611,9 +598,12 @@ async def get_company_menu_items(
     if cached_data:
         return [EventMenuItemResponse.model_validate(item) for item in cached_data]
 
-    query = select(EventMenuItem).where(
-        EventMenuItem.company_id == current_user.id
-    ).offset(skip).limit(limit)
+    query = (
+        select(EventMenuItem)
+        .where(EventMenuItem.company_id == current_user.id)
+        .offset(skip)
+        .limit(limit)
+    )
 
     if is_available is not None:
         query = query.where(EventMenuItem.is_available == is_available)
@@ -626,31 +616,26 @@ async def get_company_menu_items(
 
     response = [EventMenuItemResponse.model_validate(r) for r in items]
 
-    redis_client.set(cache_key,
-                     [r.model_dump() for r in response],
-                     ex=settings.REDIS_EX)
+    redis_client.set(
+        cache_key, [r.model_dump() for r in response], ex=settings.REDIS_EX
+    )
 
     return response
 
 
 async def update_menu_item(
-    item_id: int,
-    item_data: EventMenuItemUpdate,
-    db: AsyncSession,
-    current_user: User
+    item_id: int, item_data: EventMenuItemUpdate, db: AsyncSession, current_user: User
 ) -> EventMenuItemResponse:
     """Update an existing menu item."""
     query = select(EventMenuItem).where(
-        EventMenuItem.id == item_id,
-        EventMenuItem.company_id == current_user.id
+        EventMenuItem.id == item_id, EventMenuItem.company_id == current_user.id
     )
     result = await db.execute(query)
     item = result.scalar_one_or_none()
 
     if not item:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Menu item not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found"
         )
 
     # Update fields
@@ -670,27 +655,21 @@ async def update_menu_item(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to update menu item: {str(e)}"
+            detail=f"Failed to update menu item: {str(e)}",
         )
 
 
-async def delete_menu_item(
-    item_id: int,
-    db: AsyncSession,
-    current_user: User
-) -> None:
+async def delete_menu_item(item_id: int, db: AsyncSession, current_user: User) -> None:
     """Delete a menu item."""
     query = select(EventMenuItem).where(
-        EventMenuItem.id == item_id,
-        EventMenuItem.company_id == current_user.id
+        EventMenuItem.id == item_id, EventMenuItem.company_id == current_user.id
     )
     result = await db.execute(query)
     item = result.scalar_one_or_none()
 
     if not item:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Menu item not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found"
         )
 
     try:
@@ -704,5 +683,5 @@ async def delete_menu_item(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to delete menu item: {str(e)}"
+            detail=f"Failed to delete menu item: {str(e)}",
         )

@@ -27,8 +27,7 @@ async def get_reservations(
             limit=limit, skip=skip, db=db, current_user=current_user
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -42,8 +41,7 @@ async def create_reservation(
             reservation_data=data, db=db, current_user=current_user
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/{reservation_id}/update", status_code=status.HTTP_202_ACCEPTED)
@@ -61,8 +59,7 @@ async def update_reservation(
             current_user=current_user,
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/{reservation_id}", status_code=status.HTTP_200_OK)
@@ -76,5 +73,4 @@ async def reservation_details(
             reservation_id=reservation_id, db=db, current_user=current_user
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
