@@ -5,53 +5,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.auth import get_current_user
 from app.database.database import get_db
 from app.models.models import User
-from app.schemas.order_schema import BillSplit, OrderCreate, OrderResponse
+from app.schemas.order_schema import (
+    BillSplit,
+    OrderCreate,
+    OrderResponse,
+    UpdateOrderStatus,
+)
 from app.services import order_service
 
 
 router = APIRouter(prefix="/api/orders", tags=["Orders"])
-
-
-@router.get("/order-details", status_code=status.HTTP_200_OK)
-async def order_details(
-    order_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> OrderResponse:
-    """Retrieve an order with its items."""
-    try:
-        return await order_service.get_order_with_items(
-            order_id=order_id,
-            db=db,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.get("/company-orders", status_code=status.HTTP_200_OK)
-async def get_all_company_orders(
-    skip: int | None = None,
-    limit: int | None = None,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> list[OrderResponse]:
-    """Retrieve a list of orders with pagination, including their items.
-
-    Args:
-        skip (int | None, optional): Number of records to skip. Defaults to None.
-        limit (int | None, optional): Number of records to return. Defaults to None.
-        current_user (User, optional): Current user. Defaults to Depends(get_current_user).
-        db (AsyncSession, optional): Database session. Defaults to Depends(get_db).
-
-        Returns:
-            list[OrderResponse]: A list of orders.
-    """
-    try:
-        return await order_service.get_company_orders(
-            current_user=current_user, db=db, skip=skip, limit=limit
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -104,6 +67,32 @@ async def update_order(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.put("/update-order-status", status_code=status.HTTP_202_ACCEPTED)
+async def update_order_status(
+    order_id: UUID,
+    status_data: UpdateOrderStatus,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UpdateOrderStatus:
+    """Update an order with new item(s).
+
+    - Args:
+        - order_id.
+        - order_data
+        - Current user.
+        - Database session.
+
+    - Returns:
+        - The updated order status.
+    """
+    try:
+        return await order_service.update_order_status(
+            current_user=current_user, db=db, status_data=status_data, order_id=order_id
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.get("/order-summary", status_code=status.HTTP_200_OK)
 async def order_summary(
     order_id: UUID,
@@ -147,6 +136,26 @@ async def split_bill(
     try:
         return await order_service.split_bill(
             current_user=current_user, db=db, order_id=order_id, splits=splits
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/user-orders", status_code=status.HTTP_200_OK)
+async def user_orders(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OrderResponse:
+    """Retrieve user/company orders.
+    Args:
+        Current user.
+       Database session.
+    Returns:
+        The current guest or company orders.
+    """
+    try:
+        return await order_service.get_user_or_company_orders(
+            current_user=current_user, db=db
         )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

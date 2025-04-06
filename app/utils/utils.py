@@ -88,23 +88,17 @@ async def get_order_payment_link(
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                f"{flutterwave_base_url}/payments",
-                json=details,
-                headers=headers
+                f"{flutterwave_base_url}/payments", json=details, headers=headers
             )
             response.raise_for_status()
             response_data = response.json()
             return response_data["data"]["link"]
 
     except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Payment gateway error: {str(e)}"
-        )
+        raise HTTPException(status_code=502, detail=f"Payment gateway error: {str(e)}")
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate payment link: {str(e)}"
+            status_code=500, detail=f"Failed to generate payment link: {str(e)}"
         )
 
 

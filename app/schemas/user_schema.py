@@ -93,6 +93,11 @@ class PaymentTypeEnum(str, Enum):
     CASH = "cash"
 
 
+class ReservationPaymentTypeEnum(str, Enum):
+    CARD = "card"
+    CASH = "cash"
+
+
 class UserBase(BaseModel):
     email: EmailStr
 

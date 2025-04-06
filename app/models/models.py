@@ -1,10 +1,10 @@
 from uuid import UUID
+from decimal import Decimal
+from datetime import time, date, datetime
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
-from decimal import Decimal
 
 import uuid
-from datetime import datetime
 from sqlalchemy import JSON, DateTime
 from sqlalchemy.sql import func
 from app.database.database import Base
@@ -15,9 +15,17 @@ from sqlalchemy.orm import mapped_column, Mapped, relationship
 
 from app.schemas.item_schema import ItemCategory
 from app.schemas.order_schema import OrderStatusEnum, PaymentStatus
+from app.schemas.reservation_schema import ReservationStatus
 from app.schemas.room_schema import OutletType
 from app.schemas.subscriptions import SubscriptionStatus, SubscriptionType
-from app.schemas.user_schema import CurencySymbol, PayType, PaymentGatwayEnum, UserType
+from app.schemas.user_schema import (
+    CurencySymbol,
+    PayType,
+    PaymentGatwayEnum,
+    PaymentTypeEnum,
+    ReservationPaymentTypeEnum,
+    UserType,
+)
 
 
 def user_unique_id():
@@ -60,8 +68,7 @@ class User(Base):
     password_resets = relationship(
         "PasswordReset", back_populates="user", cascade="all, delete-orphan"
     )
-    user_profile = relationship(
-        "UserProfile", back_populates="user", uselist=False)
+    user_profile = relationship("UserProfile", back_populates="user", uselist=False)
     company_profile = relationship(
         "CompanyProfile", back_populates="user", uselist=False
     )
@@ -77,8 +84,14 @@ class User(Base):
     departments = relationship("Department", back_populates="user")
     outlets = relationship("Outlet", back_populates="user")
     no_post_list = relationship("NoPost", back_populates="user")
-    orders: Mapped[list["Order"]] = relationship(
-        "Order", back_populates="user")
+    orders: Mapped[list["Order"]] = relationship("Order", back_populates="user")
+    guest_reservations: Mapped[list["Reservation"]] = relationship(
+        "Reservation", back_populates="guest", foreign_keys="[Reservation.guest_id]"
+    )
+
+    company_reservations: Mapped[list["Reservation"]] = relationship(
+        "Reservation", back_populates="company", foreign_keys="[Reservation.company_id]"
+    )
 
 
 class Subscription(Base):
@@ -88,8 +101,7 @@ class Subscription(Base):
         primary_key=True, default=uuid.uuid1, nullable=False, index=True
     )
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
-    plan_name: Mapped[SubscriptionType] = mapped_column(
-        default=SubscriptionType.TRIAL)
+    plan_name: Mapped[SubscriptionType] = mapped_column(default=SubscriptionType.TRIAL)
     amount: Mapped[Decimal] = mapped_column(default=0.00)
     # e.g., active, canceled
     status: Mapped[SubscriptionStatus] = mapped_column(
@@ -157,11 +169,9 @@ class Role(Base):
     company = relationship(
         "User", back_populates="company_roles", foreign_keys=[company_id]
     )
-    users = relationship("User", back_populates="role",
-                         foreign_keys=[User.role_id])
+    users = relationship("User", back_populates="role", foreign_keys=[User.role_id])
 
-    __table_args__ = (UniqueConstraint(
-        "name", "company_id", name="role_name"),)
+    __table_args__ = (UniqueConstraint("name", "company_id", name="role_name"),)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -188,8 +198,7 @@ class Department(Base):
 
     name: Mapped[str] = mapped_column(unique=False)
     user = relationship("User", back_populates="departments")
-    __table_args__ = (UniqueConstraint(
-        "name", "company_id", name="department_name"),)
+    __table_args__ = (UniqueConstraint("name", "company_id", name="department_name"),)
 
 
 class Notification(Base):
@@ -227,8 +236,7 @@ class NoPost(Base):
 
 class Outlet(Base):
     __tablename__ = "outlets"
-    id: Mapped[int] = mapped_column(
-        primary_key=True, nullable=False, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, nullable=False, index=True)
     company_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -236,8 +244,7 @@ class Outlet(Base):
     name: Mapped[str]
     user = relationship("User", back_populates="outlets")
 
-    __table_args__ = (UniqueConstraint(
-        "name", "company_id", name="outlet_name"),)
+    __table_args__ = (UniqueConstraint("name", "company_id", name="outlet_name"),)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -245,8 +252,7 @@ class Outlet(Base):
 
 class QRCode(Base):
     __tablename__ = "qrcodes"
-    id: Mapped[int] = mapped_column(
-        primary_key=True, nullable=False, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, nullable=False, index=True)
     company_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -351,16 +357,14 @@ class Payroll(Base):
     )
 
     overtime_rate: Mapped[Decimal] = mapped_column(nullable=False, default=0.0)
-    night_shift_allowance: Mapped[Decimal] = mapped_column(
-        nullable=False, default=0.0)
+    night_shift_allowance: Mapped[Decimal] = mapped_column(nullable=False, default=0.0)
 
     days_worked: Mapped[int] = mapped_column(nullable=False, default=0)
     night_shifts: Mapped[int] = mapped_column(nullable=False, default=0)
     attendance_present: Mapped[int] = mapped_column(nullable=False, default=0)
     attendance_late: Mapped[int] = mapped_column(nullable=False, default=0)
 
-    late_deduction: Mapped[Decimal] = mapped_column(
-        nullable=False, default=0.0)
+    late_deduction: Mapped[Decimal] = mapped_column(nullable=False, default=0.0)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -491,8 +495,7 @@ class Item(Base):
 class Order(Base):
     __tablename__ = "orders"
 
-    id: Mapped[UUID] = mapped_column(
-        primary_key=True, default=uuid.uuid1, index=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid1, index=True)
     guest_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -509,8 +512,7 @@ class Order(Base):
     total_amount: Mapped[Decimal] = mapped_column(nullable=False, default=0.0)
     room_or_table_number: Mapped[str]
     payment_url: Mapped[str] = mapped_column(nullable=True)
-    payment_status: Mapped[str] = mapped_column(
-        default='pending')
+    payment_status: Mapped[str] = mapped_column(default="pending")
     payment_type: Mapped[str] = mapped_column(nullable=True)
 
     order_items: Mapped[list["OrderItem"]] = relationship(
@@ -546,16 +548,14 @@ class OrderItem(Base):
     quantity: Mapped[int] = mapped_column(nullable=False)
     price: Mapped[Decimal] = mapped_column(nullable=False)
 
-    order = relationship(
-        "Order", back_populates="order_items", lazy="selectin")
+    order = relationship("Order", back_populates="order_items", lazy="selectin")
     item = relationship("Item", back_populates="order_items", lazy="selectin")
 
 
 class OrderSplit(Base):
     __tablename__ = "order_splits"
 
-    id: Mapped[UUID] = mapped_column(
-        primary_key=True, default=uuid.uuid1, index=True)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid1, index=True)
     order_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
     )
@@ -574,3 +574,45 @@ class OrderSplit(Base):
     )
 
     order = relationship("Order", back_populates="splits")
+
+
+class Reservation(Base):
+    __tablename__ = "reservations"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, index=True, default=uuid.uuid1)
+    # Guest who made the reservation (can be null if company creates it)
+    guest_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # Company for which the reservation is made
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+    # For company-created reservations where guest doesn't have an account
+    guest_name: Mapped[str] = mapped_column(nullable=True)
+    guest_email: Mapped[str] = mapped_column(nullable=True)
+    guest_phone: Mapped[str] = mapped_column(nullable=True)
+
+    arrival_date: Mapped[date]
+    arrival_time: Mapped[time]
+    number_of_guests: Mapped[int] = mapped_column(nullable=False)
+    children: Mapped[int] = mapped_column(default=0, nullable=True)
+    status: Mapped[ReservationStatus] = mapped_column(default=ReservationStatus.PENDING)
+    notes: Mapped[str] = mapped_column(nullable=True)
+
+    deposit_amount: Mapped[Decimal] = mapped_column(nullable=True, default=0.0)
+    payment_status: Mapped[PaymentStatus] = mapped_column(default=PaymentStatus.PENDIND)
+    payment_url: Mapped[str] = mapped_column(nullable=True)
+    payment_type: Mapped[ReservationPaymentTypeEnum] = mapped_column(nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    guest = relationship(
+        "User", back_populates="guest_reservations", foreign_keys=[guest_id]
+    )
+    company = relationship(
+        "User", back_populates="company_reservations", foreign_keys=[company_id]
+    )

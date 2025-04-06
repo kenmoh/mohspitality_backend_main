@@ -87,3 +87,18 @@ class OrderSummaryResponse(BaseModel):
     order_id: UUID
     items: list[OrderItemSummary]
     total_amount: Decimal
+
+
+class SplitDetailResponse(BaseModel):
+    label: str
+    split_type: str
+    requested_value: str
+    allocated: Decimal
+    payment_url: str
+
+
+class BillSplitResponse(BaseModel):
+    order_id: UUID
+    total_amount: Decimal
+    splits: list[SplitDetailResponse]
+    remainder: Decimal
