@@ -14,7 +14,7 @@ class OrderStatusEnum(str, Enum):
 
 
 class PaymentStatus(str, Enum):
-    PENDIND = "pending"
+    PENDING = "pending"
     PAID = "paid"
     FAILED = "failed"
     CANCELLED = "cancelled"

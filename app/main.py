@@ -9,6 +9,7 @@ from app.config.config import redis_client
 
 from app.routes import (
     auth_router,
+    event_router,
     qrcode_router,
     user_router,
     item_router,
@@ -69,3 +70,4 @@ app.include_router(user_router.router)
 app.include_router(qrcode_router.router)
 app.include_router(item_router.router)
 app.include_router(order_router.router)
+app.include_router(event_router.router)
