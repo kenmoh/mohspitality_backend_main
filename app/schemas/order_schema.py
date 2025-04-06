@@ -20,6 +20,10 @@ class PaymentStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class UpdateOrderStatus(BaseModel):
+    status: OrderStatusEnum
+
+
 class BillSplit(BaseModel):
     label: str
     split_type: Literal["amount", "percent"]
@@ -29,6 +33,7 @@ class BillSplit(BaseModel):
 class OrderItemCreate(BaseModel):
     item_id: int
     quantity: int = Field(gt=0)
+    name: str
 
     class Config:
         from_attribute = True
@@ -51,7 +56,7 @@ class OrderCreate(BaseModel):
 
 
 class OrderItemResponse(BaseModel):
-    id: int
+    # id: UUID
     item_id: int
     quantity: int
     price: Decimal
@@ -68,3 +73,17 @@ class OrderResponse(BaseModel):
     payment_url: str
     notes: str | None = None
     order_items: list[OrderItemResponse]
+
+
+class OrderItemSummary(BaseModel):
+    item_id: int
+    name: str
+    quantity: int
+    price: Decimal
+    total: Decimal
+
+
+class OrderSummaryResponse(BaseModel):
+    order_id: UUID
+    items: list[OrderItemSummary]
+    total_amount: Decimal

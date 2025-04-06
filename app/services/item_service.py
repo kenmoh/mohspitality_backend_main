@@ -14,6 +14,7 @@ from app.schemas.item_schema import (
 from app.schemas.user_schema import UserType
 from app.services.profile_service import check_permission
 from app.config.config import redis_client, settings
+from app.utils.utils import check_current_user_id
 
 
 async def create_item(
@@ -26,11 +27,7 @@ async def create_item(
 
     cache_key = f"items:{company_id}"
 
-    company_id = (
-        current_user.id
-        if current_user.user_type == UserType.COMPANY
-        else current_user.company_id
-    )
+    company_id = check_current_user_id(current_user)
     try:
         new_item = Item(
             name=data.name,
@@ -61,11 +58,7 @@ async def get_item_by_id(
     """
     Retrieve an item by its ID.
     """
-    company_id = (
-        current_user.id
-        if current_user.user_type == UserType.COMPANY
-        else current_user.company_id
-    )
+    company_id = check_current_user_id(current_user)
     result = await db.execute(
         select(Item)
         .options(joinedload(Item.stocks))
@@ -79,11 +72,7 @@ async def update_item_item_by_id(
     db: AsyncSession, item_id: int, item_data: CreateItemSchema, current_user: User
 ) -> CreateItemSchema:
     await check_permission(user=current_user, required_permission="update_items")
-    company_id = (
-        current_user.id
-        if current_user.user_type == UserType.COMPANY
-        else current_user.company_id
-    )
+    company_id = check_current_user_id(current_user)
     """
     Update an existing item.
     """
@@ -101,7 +90,8 @@ async def update_item_item_by_id(
     )
     result = await db.execute(stmt)
 
-    redis_client.set(cache_key, json.dumps(result, default=str), ex=settings.REDIS_EX)
+    redis_client.set(cache_key, json.dumps(
+        result, default=str), ex=settings.REDIS_EX)
 
     await db.commit()
     return await result.scalar_one_or_none()
@@ -151,7 +141,8 @@ async def delete_item_by_id(db: AsyncSession, item_id: int, current_user: User) 
         if current_user.user_type == UserType.COMPANY
         else current_user.company_id
     )
-    stmt = delete(Item).where(Item.id == item_id & Item.company_id == company_id)
+    stmt = delete(Item).where(Item.id == item_id &
+                              Item.company_id == company_id)
     await db.execute(stmt)
     await db.commit()
     return None
@@ -231,7 +222,8 @@ async def update_stock(
     item = item_result.scalar_one_or_none()
 
     if not item:
-        raise Exception(f"Associated item with ID {existing_stock.item_id} not found")
+        raise Exception(
+            f"Associated item with ID {existing_stock.item_id} not found")
 
     try:
         # Remove existing stock quantity from item quantity

@@ -568,6 +568,7 @@ class OrderSplit(Base):
     allocated_amount: Mapped[Decimal] = mapped_column(
         nullable=False, default=Decimal("0.00")
     )
+    payment_url: Mapped[str] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default="now()"
     )

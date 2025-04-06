@@ -44,7 +44,7 @@ from app.schemas.user_schema import (
     StaffRoleCreate,
     UserType,
 )
-from app.utils.utils import encrypt_data
+from app.utils.utils import check_current_user_id, encrypt_data
 
 
 # def generate_permission(action: ActionEnum, resource: ResourceEnum) -> str:
@@ -468,7 +468,8 @@ async def update_company_profile(
     db: AsyncSession, data: UpdateCompanyProfile, current_user: User
 ) -> CreateCompanyProfileResponse:
     # Get the profile
-    stmt = select(CompanyProfile).where(CompanyProfile.company_id == current_user.id)
+    stmt = select(CompanyProfile).where(
+        CompanyProfile.company_id == current_user.id)
     result = await db.execute(stmt)
     company_profile = result.scalar_one_or_none()
 
@@ -501,7 +502,8 @@ async def update_company_payment_gateway(
     db: AsyncSession, data: UpdateCompanyPaymentGateway, current_user: User
 ) -> MessageResponse:
     # Get the profile
-    stmt = select(CompanyProfile).where(CompanyProfile.company_id == current_user.id)
+    stmt = select(CompanyProfile).where(
+        CompanyProfile.company_id == current_user.id)
     result = await db.execute(stmt)
     company_profile = result.scalar_one_or_none()
 
@@ -694,7 +696,8 @@ async def get_company_staff_role(
     role_id: int, db: AsyncSession, current_user: User
 ) -> RoleCreateResponse:
     result = await db.execute(
-        select(Role).where(Role.company_id == current_user.id, Role.id == role_id)
+        select(Role).where(Role.company_id ==
+                           current_user.id, Role.id == role_id)
     )
     return result.scalar_one_or_none()
 
@@ -741,11 +744,7 @@ async def create_department(
 async def get_company_departments(
     current_user: User, db: AsyncSession
 ) -> list[DepartmentResponse]:
-    company_id = (
-        current_user.id
-        if current_user.user_type == UserType.COMPANY
-        else current_user.company_id
-    )
+    company_id = check_current_user_id(current_user)
     stmt = select(Department).where(Department.company_id == company_id)
     result = await db.execute(stmt)
     departments = result.all()
@@ -760,15 +759,12 @@ async def delete_company_department(
     check_permission(current_user, required_permission="delete_departments")
 
     # Determine company ID
-    company_id = (
-        current_user.id
-        if current_user.user_type == UserType.COMPANY
-        else current_user.company_id
-    )
+    company_id = check_current_user_id(current_user)
 
     # Find the department
     stmt = select(Department).where(
-        (Department.company_id == company_id) & (Department.id == department_id)
+        (Department.company_id == company_id) & (
+            Department.id == department_id)
     )
     result = await db.execute(stmt)
     department = result.scalar_one_or_none()
@@ -789,11 +785,7 @@ async def delete_company_department(
 async def create_no_post_list(
     data: NoPostCreate, current_user: User, db: AsyncSession
 ) -> NoPostResponse:
-    company_id = (
-        current_user.id
-        if current_user.user_type == UserType.COMPANY
-        else current_user.company_id
-    )
+    company_id = check_current_user_id(current_user)
     no_post_list = NoPost(
         no_post_list=data.name.lower(),
         company_id=company_id,
@@ -806,7 +798,6 @@ async def create_no_post_list(
     if existing_record:
         # Update the existing record
         existing_record.no_post_list = data.no_post_list
-        # If you have other fields to update, add them here
 
         await db.commit()
         await db.refresh(existing_record)
@@ -828,11 +819,7 @@ async def create_no_post_list(
 async def get_company_no_post_list(
     current_user: User, db: AsyncSession
 ) -> list[DepartmentResponse]:
-    company_id = (
-        current_user.id
-        if current_user.user_type == UserType.COMPANY
-        else current_user.company_id
-    )
+    company_id = check_current_user_id(current_user)
     stmt = select(NoPost).where(NoPost.company_id == company_id)
     result = await db.execute(stmt)
     no_post_list = result.all()
@@ -872,11 +859,9 @@ async def create_outlet(current_user: User, data: DepartmentCreate, db: AsyncSes
 async def get_company_outlets(
     current_user: User, db: AsyncSession
 ) -> list[DepartmentResponse]:
-    company_id = (
-        current_user.id
-        if current_user.user_type == UserType.COMPANY
-        else current_user.company_id
-    )
+
+    company_id = check_current_user_id(current_user)
+
     stmt = select(Outlet).where(Outlet.company_id == company_id)
     result = await db.execute(stmt)
     outlets = result.all()
@@ -941,7 +926,8 @@ async def create_rate(
 
         return rate
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 async def get_company_rates(
@@ -976,13 +962,15 @@ async def delete_company_rate(
     )
 
     # Find the rate
-    stmt = select(Outlet).where(Rate.id == rate_id).where(Rate.company_id == company_id)
+    stmt = select(Outlet).where(Rate.id == rate_id).where(
+        Rate.company_id == company_id)
     result = await db.execute(stmt)
     rate = result.scalar_one_or_none()
 
     # Check if rate exists
     if not rate:
-        raise HTTPException(status_code=404, detail=f"Rate with ID {rate_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"Rate with ID {rate_id} not found")
 
     # Delete the rate
     await db.delete(rate)
