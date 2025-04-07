@@ -22,13 +22,29 @@ class PaymentStatus(str, Enum):
     REFUNDED = "REFUNDED"
 
 
+class MenuItemSelection(BaseModel):
+    id: int
+    name: str
+    price: Decimal
+
+
+class RoomSelection(BaseModel):
+    id: int
+    name: str
+    capacity: int
+
+
+class SeatArrangementSelection(BaseModel):
+    id: int
+    name: str
+    capacity: int
+
+
 class MeetingRoomBase(BaseModel):
     name: str
     capacity: int
     price: Decimal
     amenities: Optional[List[str]] = None
-    description: Optional[str] = None
-    is_available: bool = True
     image_url: Optional[str] = None
 
 
@@ -145,6 +161,8 @@ class EventMenuItemResponse(EventMenuItemBase):
 class EventBookingBase(BaseModel):
     arrival_date: date
     arrival_time: time
+    end_date: Optional[date] = None
+    end_time: time
     event_type: str
     event_theme: Optional[str] = None
     number_of_guests: int
@@ -158,11 +176,19 @@ class EventBookingBase(BaseModel):
     catering_size: Optional[int] = None
 
 
+# class EventBookingCreate(EventBookingBase):
+#     meeting_room_id: Optional[int] = None
+#     seat_arrangement_id: Optional[int] = None
+#     menu_item_ids: Optional[List[int]] = None
+#     guest_name: Optional[str] = None
+#     guest_email: Optional[EmailStr] = None
+#     guest_phone: Optional[str] = None
+#     deposit_amount: Optional[Decimal] = None
+
 class EventBookingCreate(EventBookingBase):
-    company_id: UUID
-    meeting_room_id: Optional[int] = None
-    seat_arrangement_id: Optional[int] = None
-    menu_item_ids: Optional[List[int]] = None
+    selected_menu_items: Optional[List[int]] = None
+    room_name: Optional[int] = None
+    selected_arrangement: Optional[int] = None
     guest_name: Optional[str] = None
     guest_email: Optional[EmailStr] = None
     guest_phone: Optional[str] = None

@@ -1,6 +1,9 @@
+from datetime import date, time, datetime
+from decimal import Decimal
+
 from uuid import UUID
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import or_, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import (
     EventBooking,
@@ -8,6 +11,7 @@ from app.models.models import (
     MeetingRoom,
     SeatArrangement,
     User,
+    UserProfile,
 )
 from app.schemas.event_schema import (
     EventBookingCreate,
@@ -20,19 +24,25 @@ from app.schemas.event_schema import (
     MeetingRoomCreate,
     MeetingRoomResponse,
     MeetingRoomUpdate,
+    MenuItemSelection,
+    RoomSelection,
     SeatArrangementCreate,
     SeatArrangementResponse,
+    SeatArrangementSelection,
     SeatArrangementUpdate,
 )
 
 from app.schemas.user_schema import UserType
 from app.config.config import settings, redis_client
+from app.utils.utils import check_current_user_id
 
 
 async def create_meeting_room(
     room_data: MeetingRoomCreate, db: AsyncSession, current_user: User
 ) -> MeetingRoomResponse:
     """Create a new meeting room. Only company users can create rooms."""
+
+    print('================', current_user, '=======================')
 
     if current_user.user_type == UserType.GUEST:
         raise HTTPException(
@@ -41,7 +51,8 @@ async def create_meeting_room(
         )
 
     try:
-        new_room = MeetingRoom(company_id=current_user.id, **room_data.model_dump())
+        new_room = MeetingRoom(company_id=current_user.id,
+                               **room_data.model_dump())
 
         db.add(new_room)
         await db.commit()
@@ -249,7 +260,8 @@ async def get_company_seat_arrangements(
     result = await db.execute(query)
     arrangements = result.scalars().all()
 
-    response = [SeatArrangementResponse.model_validate(r) for r in arrangements]
+    response = [SeatArrangementResponse.model_validate(
+        r) for r in arrangements]
 
     redis_client.set(
         cache_key, [r.model_dump() for r in response], ex=settings.REDIS_EX
@@ -329,42 +341,194 @@ async def delete_seat_arrangement(
         )
 
 
+# async def create_event_booking(
+#     company_id: UUID,
+#     booking_data: EventBookingCreate, db: AsyncSession, current_user: User
+# ) -> EventBookingResponse:
+#     """
+#     Create a new event booking.
+#     Both company users and guests can create bookings.
+#     """
+#     query = select(UserProfile.full_name).where(
+#         UserProfile.user_id == current_user.id, current_user.user_type == UserType.STAFF
+#     )
+#     result = await db.execute(query)
+#     staff_name = result.scalar_one_or_none()
+#     try:
+#         # Determine if this is a company-created or guest-created booking
+#         is_company_created = current_user.user_type in [
+#             UserType.COMPANY, UserType.STAFF]
+#         booking_company_id = (
+#             current_user.id
+#             if current_user.user_type == UserType.COMPANY
+#             else current_user.company_id if current_user.user_type == UserType.STAFF
+#             else company_id
+#         )
+
+#         new_booking = EventBooking(
+#             guest_id=None if is_company_created else current_user.id,
+#             company_id=booking_company_id,
+#             staff_name=staff_name if is_company_created else None,
+#             guest_name=booking_data.guest_name if is_company_created else None,
+#             guest_email=booking_data.guest_email if is_company_created else None,
+#             guest_phone=booking_data.guest_phone if is_company_created else None,
+#             **booking_data.model_dump(
+#                 exclude={"guest_name", "guest_email", "guest_phone"}
+#             ),
+#         )
+
+#         # Add menu items if specified
+#         if booking_data.menu_item_ids:
+#             menu_items = await db.execute(
+#                 select(EventMenuItem).where(
+#                     EventMenuItem.id.in_(booking_data.menu_item_ids)
+#                 )
+#             )
+#             new_booking.menu_items = menu_items.scalars().all()
+
+#         db.add(new_booking)
+#         await db.commit()
+#         await db.refresh(new_booking)
+
+#         return EventBookingResponse.model_validate(new_booking)
+
+#     except Exception as e:
+#         await db.rollback()
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail=f"Failed to create event booking: {str(e)}",
+#         )
+
 async def create_event_booking(
-    booking_data: EventBookingCreate, db: AsyncSession, current_user: User
+    company_id: UUID,
+    booking_data: EventBookingCreate,
+    db: AsyncSession,
+    current_user: User
 ) -> EventBookingResponse:
     """
     Create a new event booking.
     Both company users and guests can create bookings.
     """
-    try:
-        # Determine if this is a company-created or guest-created booking
-        is_company_created = current_user.user_type == UserType.COMPANY
+    # Get staff name if applicable
+    query = select(UserProfile.full_name).where(
+        UserProfile.user_id == current_user.id,
+        current_user.user_type == UserType.STAFF
+    )
+    result = await db.execute(query)
+    staff_name = result.scalar_one_or_none()
 
+    try:
+        # Determine booking ownership
+        is_company_created = current_user.user_type in [
+            UserType.COMPANY, UserType.STAFF]
+        booking_company_id = (
+            current_user.id
+            if current_user.user_type == UserType.COMPANY
+            else current_user.company_id if current_user.user_type == UserType.STAFF
+            else company_id
+        )
+
+        # Validate selections
+        if booking_data.selected_room:
+            rooms = await get_rooms_for_selection(db, booking_company_id)
+            if not any(room.id == booking_data.selected_room for room in rooms):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Selected room not found or not available"
+                )
+
+        if booking_data.selected_arrangement:
+            arrangements = await get_arrangements_for_selection(db, booking_company_id)
+            if not any(a.id == booking_data.selected_arrangement for a in arrangements):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Selected arrangement not found or not available"
+                )
+
+        if booking_data.room_name:
+            room_query = select(MeetingRoom).where(
+                and_(
+                    MeetingRoom.name == booking_data.room_name,
+                    MeetingRoom.company_id == booking_company_id,
+                    MeetingRoom.is_available == True
+                )
+            )
+            room = await db.execute(room_query)
+            room = room.scalar_one_or_none()
+
+            if not room:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Meeting room '{booking_data.room_name}' not found or not available"
+                )
+
+            # Check room availability for the requested time
+            is_available = await is_room_available(
+                db=db,
+                room_id=room.id,
+                arrival_date=booking_data.arrival_date,
+                arrival_time=booking_data.arrival_time,
+                end_time=booking_data.end_time,
+                end_date=booking_data.end_date
+            )
+
+            if not is_available:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Meeting room '{booking_data.room_name}' is not available for the selected time slot"
+                )
+
+        # Calculate total amount including menu items
+        total_amount = Decimal("0.00")
+        menu_items = []
+        if booking_data.selected_menu_items:
+            available_items = await get_menu_items_for_selection(db, booking_company_id)
+            menu_items = [
+                item for item in available_items
+                if item.id in booking_data.selected_menu_items
+            ]
+            if len(menu_items) != len(booking_data.selected_menu_items):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Some selected menu items are not available"
+                )
+            total_amount = sum(item.price for item in menu_items)
+
+        # Create booking
         new_booking = EventBooking(
             guest_id=None if is_company_created else current_user.id,
-            company_id=current_user.id
-            if is_company_created
-            else booking_data.company_id,
+            company_id=booking_company_id,
+            staff_name=staff_name if is_company_created else None,
             guest_name=booking_data.guest_name if is_company_created else None,
             guest_email=booking_data.guest_email if is_company_created else None,
             guest_phone=booking_data.guest_phone if is_company_created else None,
+            meeting_room_id=booking_data.selected_room,
+            seat_arrangement_id=booking_data.selected_arrangement,
+            total_amount=total_amount,
             **booking_data.model_dump(
-                exclude={"guest_name", "guest_email", "guest_phone"}
+                exclude={
+                    "guest_name", "guest_email", "guest_phone",
+                    "selected_menu_items", "selected_room", "selected_arrangement"
+                }
             ),
         )
 
-        # Add menu items if specified
-        if booking_data.menu_item_ids:
-            menu_items = await db.execute(
+        # Add selected menu items
+        if menu_items:
+            menu_item_records = await db.execute(
                 select(EventMenuItem).where(
-                    EventMenuItem.id.in_(booking_data.menu_item_ids)
+                    EventMenuItem.id.in_([item.id for item in menu_items])
                 )
             )
-            new_booking.menu_items = menu_items.scalars().all()
+            new_booking.menu_items = menu_item_records.scalars().all()
 
         db.add(new_booking)
         await db.commit()
         await db.refresh(new_booking)
+
+        # Invalidate cache
+        cache_key = f"bookings:company:{booking_company_id}"
+        redis_client.delete(cache_key)
 
         return EventBookingResponse.model_validate(new_booking)
 
@@ -372,7 +536,7 @@ async def create_event_booking(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to create event booking: {str(e)}",
+            detail=f"Failed to create event booking: {str(e)}"
         )
 
 
@@ -441,6 +605,59 @@ async def get_bookings(
     return response
 
 
+# async def update_event_booking(
+#     booking_id: UUID,
+#     booking_data: EventBookingUpdate,
+#     db: AsyncSession,
+#     current_user: User,
+# ) -> EventBookingResponse:
+#     """Update an existing event booking."""
+#     query = select(EventBooking).where(
+#         EventBooking.id == booking_id,
+#         or_(
+#             EventBooking.guest_id == current_user.id,
+#             EventBooking.company_id == current_user.id,
+#         ),
+#     )
+#     result = await db.execute(query)
+#     booking = result.scalar_one_or_none()
+
+#     if not booking:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND, detail="Event booking not found"
+#         )
+
+#     # Update fields
+#     update_data = booking_data.model_dump(exclude_unset=True)
+
+#     # Handle menu items separately if they're being updated
+#     menu_item_ids = update_data.pop("menu_item_ids", None)
+#     if menu_item_ids is not None:
+#         menu_items = await db.execute(
+#             select(EventMenuItem).where(EventMenuItem.id.in_(menu_item_ids))
+#         )
+#         booking.menu_items = menu_items.scalars().all()
+
+#     # Update other fields
+#     for field, value in update_data.items():
+#         setattr(booking, field, value)
+
+#     try:
+#         await db.commit()
+#         await db.refresh(booking)
+
+#         # Invalidate cache
+#         cache_key = f"bookings:{booking.company_id}"
+#         redis_client.delete(cache_key)
+
+#         return EventBookingResponse.model_validate(booking)
+#     except Exception as e:
+#         await db.rollback()
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail=f"Failed to update event booking: {str(e)}",
+#         )
+
 async def update_event_booking(
     booking_id: UUID,
     booking_data: EventBookingUpdate,
@@ -448,11 +665,13 @@ async def update_event_booking(
     current_user: User,
 ) -> EventBookingResponse:
     """Update an existing event booking."""
+
+    user_id = check_current_user_id(current_user)
     query = select(EventBooking).where(
         EventBooking.id == booking_id,
         or_(
-            EventBooking.guest_id == current_user.id,
-            EventBooking.company_id == current_user.id,
+            EventBooking.guest_id == user_id,
+            EventBooking.company_id == user_id,
         ),
     )
     result = await db.execute(query)
@@ -460,8 +679,55 @@ async def update_event_booking(
 
     if not booking:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Event booking not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event booking not found"
         )
+
+    # Check room availability if room or time is being updated
+    if any([
+        booking_data.room_name,
+        booking_data.arrival_date,
+        booking_data.arrival_time,
+        booking_data.end_time,
+        booking_data.end_date
+    ]):
+        # Get room ID (either from update data or existing booking)
+        if booking_data.room_name:
+            room_query = select(MeetingRoom).where(
+                and_(
+                    MeetingRoom.name == booking_data.room_name,
+                    MeetingRoom.company_id == booking.company_id,
+                    MeetingRoom.is_available == True
+                )
+            )
+            room = await db.execute(room_query)
+            room = room.scalar_one_or_none()
+
+            if not room:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Meeting room '{booking_data.room_name}' not found or not available"
+                )
+            room_id = room.id
+        else:
+            room_id = booking.meeting_room_id
+
+        # Check availability using either new or existing dates/times
+        is_available = await is_room_available(
+            db=db,
+            room_id=room_id,
+            arrival_date=booking_data.arrival_date or booking.arrival_date,
+            arrival_time=booking_data.arrival_time or booking.arrival_time,
+            end_time=booking_data.end_time or booking.end_time,
+            end_date=booking_data.end_date or booking.end_date,
+            exclude_booking_id=booking_id  # Exclude current booking from check
+        )
+
+        if not is_available:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Meeting room is not available for the selected time slot"
+            )
 
     # Update fields
     update_data = booking_data.model_dump(exclude_unset=True)
@@ -470,7 +736,9 @@ async def update_event_booking(
     menu_item_ids = update_data.pop("menu_item_ids", None)
     if menu_item_ids is not None:
         menu_items = await db.execute(
-            select(EventMenuItem).where(EventMenuItem.id.in_(menu_item_ids))
+            select(EventMenuItem).where(
+                EventMenuItem.id.in_(menu_item_ids)
+            )
         )
         booking.menu_items = menu_items.scalars().all()
 
@@ -551,7 +819,8 @@ async def create_menu_item(
         )
 
     try:
-        new_item = EventMenuItem(company_id=current_user.id, **item_data.model_dump())
+        new_item = EventMenuItem(
+            company_id=current_user.id, **item_data.model_dump())
 
         db.add(new_item)
         await db.commit()
@@ -685,3 +954,180 @@ async def delete_menu_item(item_id: int, db: AsyncSession, current_user: User) -
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to delete menu item: {str(e)}",
         )
+
+
+async def get_menu_items_for_selection(
+    db: AsyncSession,
+    company_id: UUID,
+) -> list[MenuItemSelection]:
+    """Get available menu items for dropdown selection."""
+    query = select(EventMenuItem).where(
+        EventMenuItem.company_id == company_id,
+        EventMenuItem.is_available == True
+    )
+    result = await db.execute(query)
+    items = result.scalars().all()
+
+    return [
+        MenuItemSelection(
+            id=item.id,
+            name=item.name,
+            price=item.price
+        ) for item in items
+    ]
+
+
+async def get_rooms_for_selection(
+    db: AsyncSession,
+    company_id: UUID,
+) -> list[RoomSelection]:
+    """Get available rooms for dropdown selection."""
+    query = select(MeetingRoom).where(
+        MeetingRoom.company_id == company_id,
+        MeetingRoom.is_available == True
+    )
+    result = await db.execute(query)
+    rooms = result.scalars().all()
+
+    return [
+        RoomSelection(
+            id=room.id,
+            name=room.name,
+            capacity=room.capacity
+        ) for room in rooms
+    ]
+
+
+async def get_arrangements_for_selection(
+    db: AsyncSession,
+    company_id: UUID,
+) -> list[SeatArrangementSelection]:
+    """Get available seating arrangements for dropdown selection."""
+    query = select(SeatArrangement).where(
+        SeatArrangement.company_id == company_id,
+        SeatArrangement.is_available == True
+    )
+    result = await db.execute(query)
+    arrangements = result.scalars().all()
+
+    return [
+        SeatArrangementSelection(
+            id=arr.id,
+            name=arr.name,
+            capacity=arr.capacity
+        ) for arr in arrangements
+    ]
+
+
+async def is_room_available(
+    db: AsyncSession,
+    room_id: int,
+    arrival_date: date,
+    arrival_time: time,
+    end_time: time,
+    end_date: date | None = None,
+    exclude_booking_id: UUID | None = None
+) -> bool:
+    """
+    Check if a meeting room is available for the specified time period.
+    Handles both same-day and multi-day events.
+    Returns True if room is available, False otherwise.
+    """
+    # If end_date is not provided, assume same-day event
+    end_date = end_date or arrival_date
+
+    # Create datetime objects for comparison
+    arrival_dt = datetime.combine(arrival_date, arrival_time)
+    end_dt = datetime.combine(end_date, end_time)
+
+    # Validate that end datetime is after start datetime
+    if end_dt <= arrival_dt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="End time must be after start time"
+        )
+
+    # Query existing bookings that might overlap
+    # query = (
+    #     select(EventBooking)
+    #     .where(
+    #         EventBooking.meeting_room_id == room_id,
+    #         EventBooking.status != EventStatus.CANCELLED,
+    #         # Check for date range overlap
+    #         or_(
+    #             and_(
+    #                 EventBooking.arrival_date >= arrival_date,
+    #                 EventBooking.arrival_date <= end_date
+    #             ),
+    #             and_(
+    #                 EventBooking.end_date >= arrival_date,
+    #                 EventBooking.end_date <= end_date
+    #             ) if hasattr(EventBooking, 'end_date') else False
+    #         )
+    #     )
+    # )
+    # Query existing bookings that might overlap
+    query = (
+        select(EventBooking)
+        .where(
+            EventBooking.meeting_room_id == room_id,
+            EventBooking.status != EventStatus.CANCELLED,
+            # Check for any kind of date/time overlap using standard overlap logic:
+            # Event A doesn't end before Event B starts AND Event A doesn't start after Event B ends
+            and_(
+                or_(
+                    # Same day overlap
+                    and_(
+                        EventBooking.arrival_date == arrival_date,
+                        EventBooking.arrival_time < end_time,
+                        EventBooking.end_time > arrival_time
+                    ),
+                    # Multi-day overlap
+                    and_(
+                        # Event starts during the requested period
+                        and_(
+                            EventBooking.arrival_date >= arrival_date,
+                            EventBooking.arrival_date <= end_date
+                        ),
+                        # OR event ends during the requested period
+                        or_(
+                            and_(
+                                EventBooking.end_date >= arrival_date,
+                                EventBooking.end_date <= end_date
+                            ),
+                            # OR event spans the entire requested period
+                            and_(
+                                EventBooking.arrival_date <= arrival_date,
+                                EventBooking.end_date >= end_date
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+
+    if exclude_booking_id:
+        query = query.where(EventBooking.id != exclude_booking_id)
+
+    result = await db.execute(query)
+    existing_bookings = result.scalars().all()
+
+    # Check for time conflicts
+    for booking in existing_bookings:
+        booking_start = datetime.combine(
+            booking.arrival_date, booking.arrival_time)
+        booking_end = datetime.combine(
+            booking.end_date if hasattr(
+                booking, 'end_date') else booking.arrival_date,
+            booking.end_time
+        )
+
+        # Check if there's any overlap
+        if (
+            (arrival_dt <= booking_end and end_dt >= booking_start) or
+            (booking_start <= end_dt and booking_end >= arrival_dt)
+        ):
+            return False
+
+    return True

@@ -5,7 +5,6 @@ from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 from app.database.database import AsyncSessionLocal
-from app.config.config import redis_client
 
 from app.routes import (
     auth_router,

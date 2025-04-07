@@ -70,7 +70,8 @@ class User(Base):
     password_resets = relationship(
         "PasswordReset", back_populates="user", cascade="all, delete-orphan"
     )
-    user_profile = relationship("UserProfile", back_populates="user", uselist=False)
+    user_profile = relationship(
+        "UserProfile", back_populates="user", uselist=False)
     company_profile = relationship(
         "CompanyProfile", back_populates="user", uselist=False
     )
@@ -95,7 +96,8 @@ class User(Base):
     event_menu_items: Mapped[list["EventMenuItem"]] = relationship(
         "EventMenuItem", back_populates="company"
     )
-    orders: Mapped[list["Order"]] = relationship("Order", back_populates="user")
+    orders: Mapped[list["Order"]] = relationship(
+        "Order", back_populates="user")
     guest_reservations: Mapped[list["Reservation"]] = relationship(
         "Reservation", back_populates="guest", foreign_keys="[Reservation.guest_id]"
     )
@@ -111,7 +113,8 @@ class Subscription(Base):
         primary_key=True, default=uuid.uuid1, nullable=False, index=True
     )
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
-    plan_name: Mapped[SubscriptionType] = mapped_column(default=SubscriptionType.TRIAL)
+    plan_name: Mapped[SubscriptionType] = mapped_column(
+        default=SubscriptionType.TRIAL)
     amount: Mapped[Decimal] = mapped_column(default=0.00)
     # e.g., active, canceled
     status: Mapped[SubscriptionStatus] = mapped_column(
@@ -179,9 +182,11 @@ class Role(Base):
     company = relationship(
         "User", back_populates="company_roles", foreign_keys=[company_id]
     )
-    users = relationship("User", back_populates="role", foreign_keys=[User.role_id])
+    users = relationship("User", back_populates="role",
+                         foreign_keys=[User.role_id])
 
-    __table_args__ = (UniqueConstraint("name", "company_id", name="role_name"),)
+    __table_args__ = (UniqueConstraint(
+        "name", "company_id", name="role_name"),)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -208,7 +213,8 @@ class Department(Base):
 
     name: Mapped[str] = mapped_column(unique=False)
     user = relationship("User", back_populates="departments")
-    __table_args__ = (UniqueConstraint("name", "company_id", name="department_name"),)
+    __table_args__ = (UniqueConstraint(
+        "name", "company_id", name="department_name"),)
 
 
 class Notification(Base):
@@ -246,7 +252,8 @@ class NoPost(Base):
 
 class Outlet(Base):
     __tablename__ = "outlets"
-    id: Mapped[int] = mapped_column(primary_key=True, nullable=False, index=True)
+    id: Mapped[int] = mapped_column(
+        primary_key=True, nullable=False, index=True)
     company_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -254,7 +261,8 @@ class Outlet(Base):
     name: Mapped[str]
     user = relationship("User", back_populates="outlets")
 
-    __table_args__ = (UniqueConstraint("name", "company_id", name="outlet_name"),)
+    __table_args__ = (UniqueConstraint(
+        "name", "company_id", name="outlet_name"),)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -262,7 +270,8 @@ class Outlet(Base):
 
 class QRCode(Base):
     __tablename__ = "qrcodes"
-    id: Mapped[int] = mapped_column(primary_key=True, nullable=False, index=True)
+    id: Mapped[int] = mapped_column(
+        primary_key=True, nullable=False, index=True)
     company_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -367,14 +376,16 @@ class Payroll(Base):
     )
 
     overtime_rate: Mapped[Decimal] = mapped_column(nullable=False, default=0.0)
-    night_shift_allowance: Mapped[Decimal] = mapped_column(nullable=False, default=0.0)
+    night_shift_allowance: Mapped[Decimal] = mapped_column(
+        nullable=False, default=0.0)
 
     days_worked: Mapped[int] = mapped_column(nullable=False, default=0)
     night_shifts: Mapped[int] = mapped_column(nullable=False, default=0)
     attendance_present: Mapped[int] = mapped_column(nullable=False, default=0)
     attendance_late: Mapped[int] = mapped_column(nullable=False, default=0)
 
-    late_deduction: Mapped[Decimal] = mapped_column(nullable=False, default=0.0)
+    late_deduction: Mapped[Decimal] = mapped_column(
+        nullable=False, default=0.0)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -505,7 +516,8 @@ class Item(Base):
 class Order(Base):
     __tablename__ = "orders"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid1, index=True)
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid.uuid1, index=True)
     guest_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -558,14 +570,16 @@ class OrderItem(Base):
     quantity: Mapped[int] = mapped_column(nullable=False)
     price: Mapped[Decimal] = mapped_column(nullable=False)
 
-    order = relationship("Order", back_populates="order_items", lazy="selectin")
+    order = relationship(
+        "Order", back_populates="order_items", lazy="selectin")
     item = relationship("Item", back_populates="order_items", lazy="selectin")
 
 
 class OrderSplit(Base):
     __tablename__ = "order_splits"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid1, index=True)
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid.uuid1, index=True)
     order_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
     )
@@ -589,11 +603,14 @@ class OrderSplit(Base):
 class Reservation(Base):
     __tablename__ = "reservations"
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, index=True, default=uuid.uuid1)
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, index=True, default=uuid.uuid1)
     # Guest who made the reservation (can be null if company creates it)
-    guest_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
+    guest_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=True)
     # Company for which the reservation is made
-    company_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    company_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False)
 
     # For company-created reservations where guest doesn't have an account
     guest_name: Mapped[str] = mapped_column(nullable=True)
@@ -604,13 +621,16 @@ class Reservation(Base):
     arrival_time: Mapped[time]
     number_of_guests: Mapped[int] = mapped_column(nullable=False)
     children: Mapped[int] = mapped_column(default=0, nullable=True)
-    status: Mapped[ReservationStatus] = mapped_column(default=ReservationStatus.PENDING)
+    status: Mapped[ReservationStatus] = mapped_column(
+        default=ReservationStatus.PENDING)
     notes: Mapped[str] = mapped_column(nullable=True)
 
     deposit_amount: Mapped[Decimal] = mapped_column(nullable=True, default=0.0)
-    payment_status: Mapped[PaymentStatus] = mapped_column(default=PaymentStatus.PENDING)
+    payment_status: Mapped[PaymentStatus] = mapped_column(
+        default=PaymentStatus.PENDING)
     payment_url: Mapped[str] = mapped_column(nullable=True)
-    payment_type: Mapped[ReservationPaymentTypeEnum] = mapped_column(nullable=True)
+    payment_type: Mapped[ReservationPaymentTypeEnum] = mapped_column(
+        nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -630,11 +650,15 @@ class Reservation(Base):
 
 class MeetingRoom(Base):
     __tablename__ = "meeting_rooms"
-    id: Mapped[int] = mapped_column(index=True, primary_key=True, autoincrement=True)
-    company_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    id: Mapped[int] = mapped_column(
+        index=True, primary_key=True, autoincrement=True)
+    company_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False)
     name: Mapped[str]
     capacity: Mapped[int]
-    amenities: Mapped[str]
+    amenities: Mapped[list[str]] = mapped_column(
+        ARRAY(String), nullable=True)
+    image_url: Mapped[str] = mapped_column(nullable=True)
     price: Mapped[Decimal]
     is_available: Mapped[bool] = mapped_column(default=True)
 
@@ -647,16 +671,19 @@ class MeetingRoom(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), onupdate=func.now()
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    __table_args__ = (UniqueConstraint("name", "company_id", name="room_name"),)
+    __table_args__ = (UniqueConstraint(
+        "name", "company_id", name="room_name"),)
 
 
 class SeatArrangement(Base):
     __tablename__ = "seat_arrangements"
-    id: Mapped[int] = mapped_column(index=True, primary_key=True, autoincrement=True)
-    company_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    id: Mapped[int] = mapped_column(
+        index=True, primary_key=True, autoincrement=True)
+    company_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False)
     name: Mapped[str]
     image_url: Mapped[str]
 
@@ -669,19 +696,23 @@ class SeatArrangement(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), onupdate=func.now()
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    __table_args__ = (UniqueConstraint("name", "company_id", name="arrangement_name"),)
+    __table_args__ = (UniqueConstraint(
+        "name", "company_id", name="arrangement_name"),)
 
 
 class EventBooking(Base):
     __tablename__ = "event_bookings"
-    id: Mapped[UUID] = mapped_column(primary_key=True, index=True, default=uuid.uuid1)
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, index=True, default=uuid.uuid1)
     # Guest who made the reservation (can be null if company creates it)
-    guest_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
+    guest_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=True)
     # Company for which the reservation is made
-    company_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    company_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=False)
     meeting_room_id: Mapped[int] = mapped_column(
         ForeignKey("meeting_rooms.id"), nullable=True
     )
@@ -689,13 +720,15 @@ class EventBooking(Base):
         ForeignKey("seat_arrangements.id"), nullable=True
     )
     name: Mapped[str]
+    staff_name: Mapped[str] = mapped_column(nullable=True)
     notes: Mapped[str] = mapped_column(nullable=True)
     special_requests: Mapped[str] = mapped_column(nullable=True)
     seating_arrangement: Mapped[str]
     location: Mapped[str]
     number_of_guest: Mapped[str]
 
-    event_duration: Mapped[int] = mapped_column(nullable=False)  # duration in hours
+    event_duration: Mapped[int] = mapped_column(
+        nullable=False)  # duration in hours
 
     # Contact Person (if different from guest)
     contact_person_name: Mapped[str] = mapped_column(nullable=True)
@@ -711,14 +744,16 @@ class EventBooking(Base):
 
     # Equipment/Services Needed
     # projector, mic, etc.
-    equipment_needed: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=True)
+    equipment_needed: Mapped[list[str]] = mapped_column(
+        ARRAY(String), nullable=True)
 
     # Financial
     total_amount: Mapped[Decimal] = mapped_column(
         nullable=False, default=Decimal("0.00")
     )
     deposit_amount: Mapped[Decimal] = mapped_column(nullable=True)
-    payment_status: Mapped[PaymentStatus] = mapped_column(default=PaymentStatus.PENDING)
+    payment_status: Mapped[PaymentStatus] = mapped_column(
+        default=PaymentStatus.PENDING)
     payment_url: Mapped[str] = mapped_column(nullable=True)
     status: Mapped[EventStatus] = mapped_column(default=EventStatus.PENDING)
 
@@ -726,9 +761,11 @@ class EventBooking(Base):
     arrival_time: Mapped[time]
     setup_time: Mapped[time] = mapped_column(nullable=True)
     end_time: Mapped[time] = mapped_column(nullable=True)
+    end_date: Mapped[date] = mapped_column(nullable=True)
 
     meeting_room = relationship("MeetingRoom", back_populates="bookings")
-    seat_arrangement = relationship("SeatArrangement", back_populates="event_bookings")
+    seat_arrangement = relationship(
+        "SeatArrangement", back_populates="event_bookings")
     menu_items: Mapped[list["EventMenuItem"]] = relationship(
         "EventMenuItem", secondary="event_booking_menu_items", back_populates="bookings"
     )
@@ -761,7 +798,8 @@ class EventMenuItem(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    __table_args__ = (UniqueConstraint("name", "company_id", name="menu_name"),)
+    __table_args__ = (UniqueConstraint(
+        "name", "company_id", name="menu_name"),)
 
     # Relationship
     company = relationship("User", back_populates="event_menu_items")

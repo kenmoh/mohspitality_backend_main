@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +17,11 @@ from app.schemas.event_schema import (
     MeetingRoomCreate,
     MeetingRoomResponse,
     MeetingRoomUpdate,
+    MenuItemSelection,
+    RoomSelection,
     SeatArrangementCreate,
     SeatArrangementResponse,
+    SeatArrangementSelection,
     SeatArrangementUpdate,
 )
 
@@ -36,6 +39,7 @@ async def create_meeting_room(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MeetingRoomResponse:
+
     return await event_service.create_meeting_room(room_data, db, current_user)
 
 
@@ -55,7 +59,7 @@ async def get_company_rooms(
     is_available: Optional[bool] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> List[MeetingRoomResponse]:
+) -> list[MeetingRoomResponse]:
     return await event_service.get_company_meeting_rooms(
         db, current_user, skip, limit, is_available
     )
@@ -110,7 +114,7 @@ async def get_company_arrangements(
     is_available: Optional[bool] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> List[SeatArrangementResponse]:
+) -> list[SeatArrangementResponse]:
     return await event_service.get_company_seat_arrangements(
         db, current_user, skip, limit, is_available
     )
@@ -166,7 +170,7 @@ async def get_company_menu_items(
     category: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> List[EventMenuItemResponse]:
+) -> list[EventMenuItemResponse]:
     return await event_service.get_company_menu_items(
         db, current_user, skip, limit, is_available, category
     )
@@ -194,13 +198,14 @@ async def delete_menu_item(
 # Event Booking Routes
 
 
-@router.post("/bookings", status_code=status.HTTP_201_CREATED)
+@router.post("/{}/bookings", status_code=status.HTTP_201_CREATED)
 async def create_event_booking(
+    company_id: UUID,
     booking_data: EventBookingCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> EventBookingResponse:
-    return await event_service.create_event_booking(booking_data, db, current_user)
+    return await event_service.create_event_booking(booking_data=booking_data, company_id=company_id, db=db, current_user=current_user)
 
 
 @router.get("/{booking_id}/bookings", status_code=status.HTTP_200_OK)
@@ -219,7 +224,7 @@ async def get_bookings(
     status: Optional[EventStatus] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> List[EventBookingResponse]:
+) -> list[EventBookingResponse]:
     return await event_service.get_bookings(db, current_user, skip, limit, status)
 
 
@@ -242,3 +247,27 @@ async def cancel_event_booking(
     db: AsyncSession = Depends(get_db),
 ) -> EventBookingResponse:
     return await event_service.cancel_event_booking(booking_id, db, current_user)
+
+
+@router.get("/company/{company_id}/menu-items/selection")
+async def get_menu_items_selection(
+    company_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> list[MenuItemSelection]:
+    return await event_service.get_menu_items_for_selection(db, company_id)
+
+
+@router.get("/company/{company_id}/rooms/selection")
+async def get_rooms_selection(
+    company_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> list[RoomSelection]:
+    return await event_service.get_rooms_for_selection(db, company_id)
+
+
+@router.get("/company/{company_id}/arrangements/selection")
+async def get_arrangements_selection(
+    company_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> list[SeatArrangementSelection]:
+    return await event_service.get_arrangements_for_selection(db, company_id)
