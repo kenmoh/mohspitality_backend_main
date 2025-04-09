@@ -10,6 +10,7 @@ from app.schemas.order_schema import (
     OrderCreate,
     OrderResponse,
     UpdateOrderStatus,
+    OrderSummaryResponse
 )
 from app.services import order_service
 
@@ -44,7 +45,7 @@ async def place_order(
 @router.put("/update-order", status_code=status.HTTP_202_ACCEPTED)
 async def update_order(
     order_id: UUID,
-    order_data: OrderCreate,
+    new_items: OrderCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> OrderResponse:
@@ -61,7 +62,7 @@ async def update_order(
     """
     try:
         return await order_service.update_order(
-            current_user=current_user, db=db, order_data=order_data, order_id=order_id
+            current_user=current_user, db=db, new_items=new_items, order_id=order_id
         )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -98,7 +99,7 @@ async def order_summary(
     order_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> OrderResponse:
+) -> OrderSummaryResponse:
     """Retrieve an order summary.
     Args:
 
@@ -145,7 +146,7 @@ async def split_bill(
 async def user_orders(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> OrderResponse:
+) -> list[OrderResponse]:
     """Retrieve user/company orders.
     Args:
         Current user.

@@ -33,15 +33,15 @@ class BillSplit(BaseModel):
 class OrderItemCreate(BaseModel):
     item_id: int
     quantity: int = Field(gt=0)
-    name: str
+    name: str 
 
-    class Config:
-        from_attribute = True
+    # class Config:
+    #     from_attribute = True
 
 
 class OrderCreate(BaseModel):
     company_id: UUID
-    # outlet_id: int
+    #outlet_id: int
     room_or_table_number: str
     items: list[OrderItemCreate]
 
@@ -65,7 +65,7 @@ class OrderItemResponse(BaseModel):
 
 class OrderResponse(BaseModel):
     id: UUID
-    outlet_id: int
+    #outlet_id: int
     guest_id: UUID
     status: str
     total_amount: Decimal
@@ -85,8 +85,9 @@ class OrderItemSummary(BaseModel):
 
 class OrderSummaryResponse(BaseModel):
     order_id: UUID
-    items: list[OrderItemSummary]
     total_amount: Decimal
+    items: list[OrderItemSummary]
+    
 
 
 class SplitDetailResponse(BaseModel):

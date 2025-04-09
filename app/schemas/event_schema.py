@@ -44,8 +44,10 @@ class MeetingRoomBase(BaseModel):
     name: str
     capacity: int
     price: Decimal
-    amenities: Optional[List[str]] = None
+    amenities: List[str] = []
     image_url: Optional[str] = None
+
+
 
 
 class MeetingRoomCreate(MeetingRoomBase):
@@ -57,7 +59,6 @@ class MeetingRoomUpdate(BaseModel):
     capacity: Optional[int] = None
     price: Optional[Decimal] = None
     amenities: Optional[List[str]] = None
-    description: Optional[str] = None
     is_available: Optional[bool] = None
     image_url: Optional[str] = None
 

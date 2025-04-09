@@ -1,16 +1,14 @@
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 from uuid import UUID
 from decimal import Decimal
 from datetime import time, date, datetime
-from sqlalchemy import ARRAY, ForeignKey, String
+from sqlalchemy import ARRAY, ForeignKey, String, JSON, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 
 import uuid
-from sqlalchemy import JSON, DateTime
 from sqlalchemy.sql import func
 from app.database.database import Base
 from sqlalchemy import ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import CHAR, JSONB
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 
 
@@ -657,7 +655,7 @@ class MeetingRoom(Base):
     name: Mapped[str]
     capacity: Mapped[int]
     amenities: Mapped[list[str]] = mapped_column(
-        ARRAY(String), nullable=True)
+        JSON, nullable=True, default=list)
     image_url: Mapped[str] = mapped_column(nullable=True)
     price: Mapped[Decimal]
     is_available: Mapped[bool] = mapped_column(default=True)

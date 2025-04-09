@@ -1,10 +1,14 @@
 from datetime import date, time, datetime
 from decimal import Decimal
 
+import json
 from uuid import UUID
+from asyncpg import UniqueViolationError
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 from sqlalchemy import or_, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.models import (
     EventBooking,
     EventMenuItem,
@@ -42,8 +46,6 @@ async def create_meeting_room(
 ) -> MeetingRoomResponse:
     """Create a new meeting room. Only company users can create rooms."""
 
-    print('================', current_user, '=======================')
-
     if current_user.user_type == UserType.GUEST:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -52,13 +54,25 @@ async def create_meeting_room(
 
     try:
         new_room = MeetingRoom(company_id=current_user.id,
-                               **room_data.model_dump())
+                               updated_at=datetime.now(), **room_data.model_dump())
 
         db.add(new_room)
         await db.commit()
         await db.refresh(new_room)
 
-        return MeetingRoomResponse.model_validate(new_room)
+        return new_room
+    except IntegrityError as e:
+        await db.rollback()
+        error_message = str(e.orig)
+        if "unique constraint" in error_message.lower() and "room_name" in error_message:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A room named '{room_data.name}' already exists for your company"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="An error occurred while creating the room"
+        )
 
     except Exception as e:
         await db.rollback()
@@ -72,6 +86,16 @@ async def get_meeting_room(
     room_id: int, db: AsyncSession, current_user: User
 ) -> MeetingRoomResponse:
     """Get a single meeting room by ID."""
+
+    user_id = check_current_user_id(current_user)
+    cache_key = f"rooms:details:company:{user_id}"
+    cached_data = redis_client.get(cache_key)
+
+    # Check cache first
+    if cached_data:
+        print('==================FROM CACHE==================ROOOM', cached_data)
+        return json.loads(cached_data)
+
     query = select(MeetingRoom).where(MeetingRoom.id == room_id)
     result = await db.execute(query)
     room = result.scalar_one_or_none()
@@ -80,8 +104,14 @@ async def get_meeting_room(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Meeting room not found"
         )
+    room_data = MeetingRoomResponse.model_validate(room).model_dump()
 
-    return MeetingRoomResponse.model_validate(room)
+    # Cache the results
+    redis_client.set(
+        cache_key, json.dumps(room_data, default=str), ex=settings.REDIS_EX
+    )
+
+    return room
 
 
 async def get_company_meeting_rooms(
@@ -93,15 +123,17 @@ async def get_company_meeting_rooms(
 ) -> list[MeetingRoomResponse]:
     """Get all meeting rooms for a company with optional filtering."""
     # Check cache first
-    cache_key = f"rooms:company:{current_user.id}:skip:{skip}:limit:{limit}:available:{is_available}"
+    user_id = check_current_user_id(current_user)
+    cache_key = f"rooms:company:{user_id}"
     cached_data = redis_client.get(cache_key)
 
     if cached_data:
-        return [MeetingRoomResponse.model_validate(item) for item in cached_data]
+        data = json.loads(cached_data)
+        return [MeetingRoomResponse.model_validate(room) for room in data]
 
     query = (
         select(MeetingRoom)
-        .where(MeetingRoom.company_id == current_user.id)
+        .where(MeetingRoom.company_id == user_id)
         .offset(skip)
         .limit(limit)
     )
@@ -110,23 +142,29 @@ async def get_company_meeting_rooms(
         query = query.where(MeetingRoom.is_available == is_available)
 
     result = await db.execute(query)
-    rooms = result.scalars().all()
+    rooms = result.unique().scalars().all()
+    rooms_dict = [room.__dict__ for room in rooms]
+
+    rooms_data = [
+        MeetingRoomResponse.model_validate(room_dict).model_dump() for room_dict in rooms_dict
+    ]
 
     # Cache the results
-    response = [MeetingRoomResponse.model_validate(r) for r in rooms]
     redis_client.set(
-        cache_key, [r.model_dump() for r in response], ex=settings.REDIS_EX
+        cache_key, json.dumps(rooms_data, default=str), ex=settings.REDIS_EX
     )
 
-    return response
+    return rooms
 
 
 async def update_meeting_room(
     room_id: int, room_data: MeetingRoomUpdate, db: AsyncSession, current_user: User
 ) -> MeetingRoomResponse:
     """Update an existing meeting room."""
+
+    company_id = check_current_user_id(current_user)
     query = select(MeetingRoom).where(
-        MeetingRoom.id == room_id, MeetingRoom.company_id == current_user.id
+        MeetingRoom.id == room_id, MeetingRoom.company_id == company_id
     )
     result = await db.execute(query)
     room = result.scalar_one_or_none()

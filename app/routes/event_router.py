@@ -43,16 +43,7 @@ async def create_meeting_room(
     return await event_service.create_meeting_room(room_data, db, current_user)
 
 
-@router.get("/{room_id}/rooms", status_code=status.HTTP_200_OK)
-async def get_meeting_room(
-    room_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> MeetingRoomResponse:
-    return await event_service.get_meeting_room(room_id, db, current_user)
-
-
-@router.get("/company/rooms", status_code=status.HTTP_200_OK)
+@router.get("/company-rooms", status_code=status.HTTP_200_OK)
 async def get_company_rooms(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1),
@@ -63,6 +54,15 @@ async def get_company_rooms(
     return await event_service.get_company_meeting_rooms(
         db, current_user, skip, limit, is_available
     )
+
+@router.get("/{room_id}/rooms", status_code=status.HTTP_200_OK)
+async def get_meeting_room(
+    room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MeetingRoomResponse:
+    return await event_service.get_meeting_room(room_id, db, current_user)
+
 
 
 @router.put("/{room_id}/rooms", status_code=status.HTTP_202_ACCEPTED)

@@ -17,7 +17,7 @@ from app.schemas.order_schema import (
     UpdateOrderStatus,
 )
 from app.schemas.user_schema import UserType
-from app.config.config import redis_client
+from app.config.config import redis_client, settings
 from app.services.profile_service import check_permission
 from app.utils.utils import check_current_user_id, get_order_payment_link
 
@@ -27,11 +27,12 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
     Create a new order with multiple items.
     """
     query = (
-        select(User).options(joinedload(UserProfile)).where(User.id == current_user.id)
+        select(User).options(joinedload(User.user_profile)).where(
+            User.id == current_user.id)
     )
     result = await db.execute(query)
     user = result.scalar_one_or_none()
-    # Star
+
     try:
         # Extract item IDs from request
         item_ids = [item.item_id for item in order_data.items]
@@ -41,7 +42,8 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
         items_dict = {item.id: item for item in result.scalars()}
 
         if not items_dict:
-            raise HTTPException(status_code=400, detail="No valid items found.")
+            raise HTTPException(
+                status_code=400, detail="No valid items found.")
 
         # Validate item stock & calculate total price
         total_amount = Decimal(0)
@@ -63,9 +65,13 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
             # Reduce stock
             item.quantity -= item_data.quantity
 
-            order_items.append(
-                {"id": item.id, "quantity": item_data.quantity, "price": item.price}
+            order_item = OrderItem(
+                item_id=item.id,
+                quantity=item_data.quantity,
+                price=item.price
             )
+
+            order_items.append(order_item)
 
             # Store item details for response
             item_details.append(
@@ -86,7 +92,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
             room_or_table_number=order_data.room_or_table_number,
             company_id=order_data.company_id,
             guest_name_or_email=user.user_profile.full_name
-            if user.user_profile.full_name
+            if user.user_profile is not None
             else current_user.email,
             total_amount=total_amount,
             status=OrderStatusEnum.NEW,
@@ -126,6 +132,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
         response = OrderResponse(
             id=new_order.id,
             guest_id=new_order.guest_id,
+            room_or_table_number=new_order.room_or_table_number,
             total_amount=new_order.total_amount,
             status=new_order.status,
             payment_url=new_order.payment_url,
@@ -143,7 +150,8 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
     except HTTPException as http_ex:
         raise http_ex
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Order creation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Order creation failed: {str(e)}")
 
 
 async def update_order(
@@ -159,10 +167,13 @@ async def update_order(
     Returns a dict containing the updated order and the newly added order items.
     """
 
-    check_permission(user=current_user, required_permission="update_orders")
+    #check_permission(user=current_user, required_permission="update_orders")
     user_id = check_current_user_id(current_user=current_user)
     # Fetch the order to update
-    query = select(Order).where(Order.id == order_id)
+    query = select(Order).options(
+            selectinload(Order.order_items)
+            .joinedload(OrderItem.item)
+        ).where(Order.id == order_id)
     result = await db.execute(query)
     order = result.scalar_one_or_none()
     if not order:
@@ -217,7 +228,33 @@ async def update_order(
     order_cache_key = f"orders:guest:{user_id}"
     redis_client.delete(order_cache_key)
 
-    return {"order": order, "new_order_items": added_order_items}
+    #return {"order": order, "new_order_items": added_order_items}
+    #return order
+    
+    # Construct the response with item names
+    order_items_response = [
+        OrderItemResponse(
+            item_id=order_item.item_id,
+            quantity=order_item.quantity,
+            price=order_item.price,
+            name=order_item.item.name  # Include the item name
+        )
+        for order_item in order.order_items
+    ]
+    
+    order_response = OrderResponse(
+        id=order.id,
+        guest_id=order.guest_id,
+        status=order.status,
+        total_amount=order.total_amount,
+        room_or_table_number=order.room_or_table_number,
+        payment_url=order.payment_url or "",
+        notes=order.notes,
+        order_items=order_items_response
+    )
+    
+    return order_response
+
 
 
 async def get_order_summary(
@@ -282,18 +319,23 @@ async def split_bill(
     """
     # Query the order's total amount
     query = (
-        select(Order.total_amount, Order.company_id)
+        select(Order)
         .where(Order.id == order_id)
         .where(Order.guest_id == current_user.id)
     )
     result = await db.execute(query)
-    total_amount, company_id = result.scalar_one_or_none()
+    
+    order = result.scalar_one_or_none()
+      
+    total_amount = order.total_amount
+    company_id = order.company_id
 
     if total_amount is None:
         raise HTTPException(
             status_code=404,
             detail=f"Order with ID {order_id} not found",
         )
+        
 
     allocated = Decimal("0.00")
     split_details = []
@@ -301,7 +343,7 @@ async def split_bill(
 
     for split in splits:
         if split.split_type == "amount":
-            part = split.amount
+            part = split.value
         elif split.split_type == "percent":
             part = (total_amount * split.amount) / Decimal("100")
         else:
@@ -323,7 +365,7 @@ async def split_bill(
             db=db,
             company_id=company_id,
             current_user=current_user,
-            _id=company_id,  # or use a unique ID for this split
+            _id=company_id,
             amount=part,
         )
         order_split.payment_url = payment_url
@@ -377,11 +419,51 @@ async def get_user_or_company_orders(current_user: User, db: AsyncSession):
         json.loads(cached_orders)
 
     result = await db.execute(
-        select(Order).where(or_(Order.company_id == user_id, Order.guest_id == user_id))
+        select(Order)
+        .options(
+            selectinload(Order.order_items)
+            .joinedload(OrderItem.item)
+        )
+        .where(or_(Order.company_id == user_id, Order.guest_id == current_user.id))
     )
+
     orders = result.unique().scalars().all()
 
-    return orders
+    order_responses = []
+    for order in orders:
+        order_items_response = [
+            OrderItemResponse(
+                item_id=order_item.item_id,
+                quantity=order_item.quantity,
+                price=order_item.price,
+                name=order_item.item.name
+            )
+            for order_item in order.order_items
+        ]
+
+        order_response = OrderResponse(
+            id=order.id,
+            guest_id=order.guest_id,
+            status=order.status,
+            total_amount=order.total_amount,
+            room_or_table_number=order.room_or_table_number,
+            payment_url=order.payment_url or "",  # Handle None values
+            notes=order.notes,
+            order_items=order_items_response
+        )
+        order_responses.append(order_response)
+
+        # Cache the results
+        cache_data = json.dumps([order.model_dump()
+                                for order in order_responses], default=str)
+        if current_user.user_type == UserType.GUEST:
+            redis_client.set(guest_orders_cache_key,
+                             cache_data, ex=settings.REDIS_EX)
+        else:
+            redis_client.set(company_orders_cache_key,
+                             cache_data, ex=settings.REDIS_EX)
+
+    return order_responses
 
 
 async def update_order_status(
@@ -390,7 +472,8 @@ async def update_order_status(
     check_permission(user=current_user, required_permission="update_orders")
 
     user_id = check_current_user_id(current_user)
-    stmt = select(Order).where(Order.id == order_id, Order.company_id == user_id)
+    stmt = select(Order).where(Order.id == order_id,
+                               Order.company_id == user_id)
 
     result = await db.execute(stmt)
     order = result.scalar_one_or_none()
@@ -411,3 +494,6 @@ async def update_order_status(
     redis_client.delete(guest_order_cache_key)
 
     return order
+
+
+# d68bbf86-0ad8-11f0-9558-75b24b59bc1c
