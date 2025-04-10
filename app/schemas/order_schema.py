@@ -24,24 +24,25 @@ class UpdateOrderStatus(BaseModel):
     status: OrderStatusEnum
 
 
-class BillSplit(BaseModel):
-    label: str
-    split_type: Literal["amount", "percent"]
-    value: Decimal
+class OrderItemSplit(BaseModel):
+    item_id: int
+    quantity: int
+
+
+class OrderSplitRequest(BaseModel):
+    items: list[OrderItemSplit]
 
 
 class OrderItemCreate(BaseModel):
     item_id: int
     quantity: int = Field(gt=0)
-    name: str 
-
-    # class Config:
-    #     from_attribute = True
+    name: str
 
 
 class OrderCreate(BaseModel):
     company_id: UUID
-    #outlet_id: int
+    # outlet_id: int
+    notes: str | None = None
     room_or_table_number: str
     items: list[OrderItemCreate]
 
@@ -65,13 +66,15 @@ class OrderItemResponse(BaseModel):
 
 class OrderResponse(BaseModel):
     id: UUID
-    #outlet_id: int
+    # outlet_id: int
     guest_id: UUID
+    original_order_id: UUID
     status: str
     total_amount: Decimal
     room_or_table_number: str
     payment_url: str
     notes: str | None = None
+    is_split: bool
     order_items: list[OrderItemResponse]
 
 
@@ -87,7 +90,6 @@ class OrderSummaryResponse(BaseModel):
     order_id: UUID
     total_amount: Decimal
     items: list[OrderItemSummary]
-    
 
 
 class SplitDetailResponse(BaseModel):
@@ -100,6 +102,12 @@ class SplitDetailResponse(BaseModel):
 
 class BillSplitResponse(BaseModel):
     order_id: UUID
-    total_amount: Decimal
+    original_amount: Decimal
+    remaining_amount: Decimal
+    total_split_amount: Decimal
     splits: list[SplitDetailResponse]
-    remainder: Decimal
+
+    # order_id: UUID
+    # total_amount: Decimal
+    # splits: list[SplitDetailResponse]
+    # remainder: Decimal

@@ -519,10 +519,13 @@ class Order(Base):
     guest_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    original_order_id: Mapped[UUID] = mapped_column(
+        nullable=True)  # For split orders
     outlet_id: Mapped[int] = mapped_column(nullable=True)
     company_id: Mapped[UUID]
     guest_name_or_email: Mapped[str]
     notes: Mapped[str] = mapped_column(nullable=True)
+    is_split: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -543,12 +546,6 @@ class Order(Base):
     )
 
     user = relationship("User", back_populates="orders", lazy="selectin")
-    splits: Mapped[list["OrderSplit"]] = relationship(
-        "OrderSplit",
-        back_populates="order",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
 
 
 class OrderItem(Base):
@@ -571,31 +568,6 @@ class OrderItem(Base):
     order = relationship(
         "Order", back_populates="order_items", lazy="selectin")
     item = relationship("Item", back_populates="order_items", lazy="selectin")
-
-
-class OrderSplit(Base):
-    __tablename__ = "order_splits"
-
-    id: Mapped[UUID] = mapped_column(
-        primary_key=True, default=uuid.uuid1, index=True)
-    order_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
-    )
-    label: Mapped[str] = mapped_column(nullable=False)
-    # split_type can be either "amount" or "percent"
-    split_type: Mapped[str] = mapped_column(nullable=False)
-    # For "amount", value is the fixed monetary amount; for "percent", it is the percentage (e.g., 25 for 25%)
-    value: Mapped[Decimal] = mapped_column(nullable=False)
-    # Allocated is the computed amount for this split (after validating/splitting)
-    allocated_amount: Mapped[Decimal] = mapped_column(
-        nullable=False, default=Decimal("0.00")
-    )
-    payment_url: Mapped[str] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default="now()"
-    )
-
-    order = relationship("Order", back_populates="splits")
 
 
 class Reservation(Base):
