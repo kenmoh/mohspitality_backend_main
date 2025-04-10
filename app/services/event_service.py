@@ -88,13 +88,12 @@ async def get_meeting_room(
     """Get a single meeting room by ID."""
 
     user_id = check_current_user_id(current_user)
-    cache_key = f"rooms:details:company:{user_id}"
+    cache_key = f"rooms:details:{room_id}:company:{user_id}"
     cached_data = redis_client.get(cache_key)
 
     # Check cache first
     if cached_data:
-        print('==================FROM CACHE==================ROOOM', cached_data)
-        return json.loads(cached_data)
+        return MeetingRoomResponse(**json.loads(cached_data))
 
     query = select(MeetingRoom).where(MeetingRoom.id == room_id)
     result = await db.execute(query)
@@ -104,22 +103,36 @@ async def get_meeting_room(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Meeting room not found"
         )
-    room_data = MeetingRoomResponse.model_validate(room).model_dump()
 
-    # Cache the results
+    # Convert SQLAlchemy model to dict first
+    room_dict = {
+        "id": room.id,
+        "name": room.name,
+        "capacity": room.capacity,
+        "price": room.price,
+        "amenities": room.amenities,
+        "image_url": room.image_url,
+        "company_id": room.company_id,
+        "created_at": room.created_at,
+        "updated_at": room.updated_at
+    }
+
+    # Validate with Pydantic
+    room_data = MeetingRoomResponse(**room_dict)
+
+    # Cache the serialized data
     redis_client.set(
-        cache_key, json.dumps(room_data, default=str), ex=settings.REDIS_EX
+        cache_key,
+        room_data.model_dump_json(),
+        ex=settings.REDIS_EX
     )
 
-    return room
+    return room_data
 
 
 async def get_company_meeting_rooms(
     db: AsyncSession,
     current_user: User,
-    skip: int = 0,
-    limit: int = 20,
-    is_available: bool = None,
 ) -> list[MeetingRoomResponse]:
     """Get all meeting rooms for a company with optional filtering."""
     # Check cache first
@@ -134,12 +147,7 @@ async def get_company_meeting_rooms(
     query = (
         select(MeetingRoom)
         .where(MeetingRoom.company_id == user_id)
-        .offset(skip)
-        .limit(limit)
     )
-
-    if is_available is not None:
-        query = query.where(MeetingRoom.is_available == is_available)
 
     result = await db.execute(query)
     rooms = result.unique().scalars().all()
@@ -169,6 +177,18 @@ async def update_meeting_room(
     result = await db.execute(query)
     room = result.scalar_one_or_none()
 
+    room_dict = {
+        "id": room.id,
+        "name": room.name,
+        "capacity": room.capacity,
+        "price": room.price,
+        "amenities": room.amenities,
+        "image_url": room.image_url,
+        "company_id": room.company_id,
+        "created_at": room.created_at,
+        "updated_at": room.updated_at
+    }
+
     if not room:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Meeting room not found"
@@ -183,10 +203,10 @@ async def update_meeting_room(
         await db.refresh(room)
 
         # Invalidate cache
-        cache_key = f"rooms:company:{current_user.id}"
+        cache_key = f"rooms:details:{room_id}:company:{current_user.id}"
         redis_client.delete(cache_key)
 
-        return MeetingRoomResponse.model_validate(room)
+        return MeetingRoomResponse(**room_dict)
     except Exception as e:
         await db.rollback()
         raise HTTPException(

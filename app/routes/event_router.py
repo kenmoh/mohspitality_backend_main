@@ -45,14 +45,11 @@ async def create_meeting_room(
 
 @router.get("/company-rooms", status_code=status.HTTP_200_OK)
 async def get_company_rooms(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1),
-    is_available: Optional[bool] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[MeetingRoomResponse]:
     return await event_service.get_company_meeting_rooms(
-        db, current_user, skip, limit, is_available
+        db, current_user
     )
 
 @router.get("/{room_id}/rooms", status_code=status.HTTP_200_OK)

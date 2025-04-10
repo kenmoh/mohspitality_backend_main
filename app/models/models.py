@@ -655,6 +655,7 @@ class SeatArrangement(Base):
     company_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id"), nullable=False)
     name: Mapped[str]
+    description: Mapped[str] = mapped_column(nullable=True)
     image_url: Mapped[str]
 
     event_bookings: Mapped[list["EventBooking"]] = relationship(

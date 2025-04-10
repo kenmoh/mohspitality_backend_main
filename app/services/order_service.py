@@ -496,182 +496,6 @@ async def split_order(
         )
 
 
-async def merge_orders(
-    target_order_id: UUID,
-    source_order_ids: list[UUID],
-    current_user: User,
-    db: AsyncSession,
-):
-    """
-    Merge selected split orders back into the original order.
-    - Moves items from split orders back to original
-    - Updates quantities and totals
-    - Deletes the emptied split orders
-    """
-    # Get the target (original) order with locking
-    target_order = await db.execute(
-        select(Order)
-        .with_for_update()
-        .options(
-            selectinload(Order.order_items)
-            .joinedload(OrderItem.item)
-        )
-        .where(Order.id == target_order_id)
-        .where(Order.guest_id == current_user.id)
-    )
-    target_order = target_order.scalar_one_or_none()
-
-    if not target_order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Original order not found",
-        )
-
-    # Get whatever source orders exist (don't require all to be found)
-    source_orders = await db.execute(
-        select(Order)
-        .with_for_update()
-        .options(
-            selectinload(Order.order_items)
-            .joinedload(OrderItem.item)
-        )
-        .where(Order.original_order_id.in_(source_order_ids))
-        .where(Order.guest_id == current_user.id)
-        # Ensure they're actually splits
-        .where(Order.is_split == True)
-    )
-    source_orders = source_orders.scalars().all()
-
-    if not source_orders:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No valid split orders found to merge",
-        )
-
-    try:
-        total_merged_amount = Decimal(0)
-        merged_items = []
-
-        # Create mapping of target order items for quick lookup
-        target_items_map = {oi.item_id: oi for oi in target_order.order_items}
-
-        # Process each source order that was found
-        for source_order in source_orders:
-            # Skip if trying to merge order with itself
-            if source_order.id == target_order.id:
-                continue
-
-            # Validate source order can be merged
-            if source_order.guest_id != target_order.guest_id or source_order.outlet_id != target_order.outlet_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Split order {source_order.id} doesn't match original order's guest/outlet",
-                )
-
-            # if source_order.status != OrderStatusEnum.NEW:
-            #     raise HTTPException(
-            #         status_code=status.HTTP_400_BAD_REQUEST,
-            #         detail=f"Only NEW split orders can be merged (order {source_order.id} is {source_order.status})",
-            #     )
-
-            # Process each item in source order
-            for source_item in source_order.order_items:
-                # Find matching item in target order
-                target_item = target_items_map.get(source_item.item_id)
-
-                if target_item:
-                    # Item exists in target - merge quantities
-                    target_item.quantity += source_item.quantity
-                    item_amount = source_item.price * \
-                        Decimal(source_item.quantity)
-                    total_merged_amount += item_amount
-                else:
-                    # Item doesn't exist in target - add it
-                    new_order_item = OrderItem(
-                        item_id=source_item.item_id,
-                        quantity=source_item.quantity,
-                        price=source_item.price,
-                        order_id=target_order.id
-                    )
-                    db.add(new_order_item)
-                    item_amount = source_item.price * \
-                        Decimal(source_item.quantity)
-                    total_merged_amount += item_amount
-                    # Update our mapping
-                    target_items_map[source_item.item_id] = new_order_item
-
-                merged_items.append({
-                    "item_id": source_item.item_id,
-                    "name": source_item.item.name,
-                    "quantity": source_item.quantity,
-                    "price": str(source_item.price)
-                })
-
-            # Delete the source order (cascade will delete order items)
-            await db.delete(source_order)
-
-        # Update target order total
-        target_order.total_amount += total_merged_amount
-
-        # Generate new payment link if needed
-        if target_order.payment_url:
-            new_payment_link = await get_order_payment_link(
-                db=db,
-                company_id=target_order.company_id,
-                current_user=current_user,
-                _id=target_order.id,
-                amount=target_order.total_amount,
-            )
-            target_order.payment_url = new_payment_link
-
-        await db.commit()
-        await db.refresh(target_order)
-
-        # Build response
-        order_items_response = [
-            OrderItemResponse(
-                item_id=order_item.item_id,
-                name=order_item.item.name,
-                quantity=order_item.quantity,
-                price=order_item.price,
-            )
-            for order_item in target_order.order_items
-        ]
-
-        response = {
-            "message": f"Successfully merged {len(source_orders)} split orders",
-            "original_order": OrderResponse(
-                id=target_order.id,
-                guest_id=target_order.guest_id,
-                room_or_table_number=target_order.room_or_table_number,
-                total_amount=target_order.total_amount,
-                status=target_order.status,
-                payment_url=target_order.payment_url,
-                created_at=target_order.created_at,
-                order_items=order_items_response,
-            ),
-            "merged_items": merged_items,
-            "deleted_split_orders": [str(order.id) for order in source_orders]
-        }
-
-        # Clear relevant caches
-        company_orders_cache_key = f"orders:company:{target_order.company_id}"
-        guest_orders_cache_key = f"orders:guest:{current_user.id}"
-        redis_client.delete(company_orders_cache_key)
-        redis_client.delete(guest_orders_cache_key)
-
-        return response
-
-    except HTTPException as http_ex:
-        await db.rollback()
-        raise http_ex
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Order merging failed: {str(e)}"
-        )
-
 async def get_split_orders(
     original_order_id: UUID,
     current_user: User,
@@ -729,7 +553,8 @@ async def get_split_orders(
             guest_id=order.guest_id,
             room_or_table_number=order.room_or_table_number,
             total_amount=order.total_amount,
-            status=order.status.value if hasattr(order.status, 'value') else order.status,
+            status=order.status.value if hasattr(
+                order.status, 'value') else order.status,
             payment_url=order.payment_url,
             original_order_id=order.original_order_id,
             order_items=order_items_response,
@@ -737,8 +562,8 @@ async def get_split_orders(
             notes=order.notes
         ))
 
-
     return response
+
 
 async def delete_split_order(
     split_order_id: UUID,
@@ -767,7 +592,7 @@ async def delete_split_order(
         if not split_order:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Split order not found"
+                detail="Split order not found or not eligible for deletion"
             )
 
         if not split_order.original_order_id:
@@ -792,7 +617,7 @@ async def delete_split_order(
         for split_item in split_order.order_items:
             # Find corresponding item in original order
             original_item = next(
-                (oi for oi in original_order.order_items 
+                (oi for oi in original_order.order_items
                  if oi.item_id == split_item.item_id), None)
 
             if original_item:
@@ -838,6 +663,7 @@ async def delete_split_order(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete split order: {str(e)}"
         )
+
 
 async def get_user_or_company_orders(current_user: User, db: AsyncSession):
     user_id = check_current_user_id(current_user)

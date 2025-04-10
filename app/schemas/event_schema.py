@@ -48,8 +48,6 @@ class MeetingRoomBase(BaseModel):
     image_url: Optional[str] = None
 
 
-
-
 class MeetingRoomCreate(MeetingRoomBase):
     pass
 
@@ -73,9 +71,7 @@ class MeetingRoomResponse(MeetingRoomBase):
 class SeatArrangementBase(BaseModel):
     name: str
     description: Optional[str] = None
-    capacity: int
-    image_url: Optional[str] = None
-    is_available: bool = True
+    image_url: str
 
 
 class SeatArrangementCreate(SeatArrangementBase):
