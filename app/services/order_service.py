@@ -15,12 +15,12 @@ from app.schemas.order_schema import (
     OrderStatusEnum,
     OrderSummaryResponse,
     UpdateOrderStatus,
-    PaymentStatus
+    PaymentStatus,
 )
 from app.schemas.user_schema import UserType
 from app.config.config import redis_client, settings
 from app.services.profile_service import check_permission
-from app.utils.utils import check_current_user_id, get_order_payment_link
+from app.utils.utils import get_company_id, get_order_payment_link
 
 
 async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: User):
@@ -28,8 +28,9 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
     Create a new order with multiple items.
     """
     query = (
-        select(User).options(joinedload(User.user_profile)).where(
-            User.id == current_user.id)
+        select(User)
+        .options(joinedload(User.user_profile))
+        .where(User.id == current_user.id)
     )
     result = await db.execute(query)
     user = result.scalar_one_or_none()
@@ -67,9 +68,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
             item.quantity -= item_data.quantity
 
             order_item = OrderItem(
-                item_id=item.id,
-                quantity=item_data.quantity,
-                price=item.price
+                item_id=item.id, quantity=item_data.quantity, price=item.price
             )
 
             order_items.append(order_item)
@@ -175,12 +174,14 @@ async def update_order(
     """
 
     # check_permission(user=current_user, required_permission="update_orders")
-    user_id = check_current_user_id(current_user=current_user)
+    user_id = get_company_id(current_user) if (
+        current_user.user_type == UserType.COMPANY or current_user.user_type == UserType.STAFF) else current_user.id
     # Fetch the order to update
-    query = select(Order).options(
-        selectinload(Order.order_items)
-        .joinedload(OrderItem.item)
-    ).where(Order.id == order_id)
+    query = (
+        select(Order)
+        .options(selectinload(Order.order_items).joinedload(OrderItem.item))
+        .where(Order.id == order_id)
+    )
     result = await db.execute(query)
     order = result.scalar_one_or_none()
     if not order:
@@ -244,7 +245,7 @@ async def update_order(
             item_id=order_item.item_id,
             quantity=order_item.quantity,
             price=order_item.price,
-            name=order_item.item.name  # Include the item name
+            name=order_item.item.name,  # Include the item name
         )
         for order_item in order.order_items
     ]
@@ -257,7 +258,7 @@ async def update_order(
         room_or_table_number=order.room_or_table_number,
         payment_url=order.payment_url or "",
         notes=order.notes,
-        order_items=order_items_response
+        order_items=order_items_response,
     )
 
     return order_response
@@ -330,10 +331,7 @@ async def split_order(
     original_order = await db.execute(
         select(Order)
         .with_for_update()
-        .options(
-            selectinload(Order.order_items)
-            .joinedload(OrderItem.item)
-        )
+        .options(selectinload(Order.order_items).joinedload(OrderItem.item))
         .where(Order.id == order_id)
         .where(Order.guest_id == current_user.id)
     )
@@ -392,16 +390,18 @@ async def split_order(
             new_order_item = OrderItem(
                 item_id=original_item.item_id,
                 quantity=item_request.quantity,
-                price=original_item.price
+                price=original_item.price,
             )
             new_order_items.append(new_order_item)
 
             # Track items to update in original order
-            items_to_update.append({
-                'original_item': original_item,
-                'split_quantity': item_request.quantity,
-                'item_amount': item_amount
-            })
+            items_to_update.append(
+                {
+                    "original_item": original_item,
+                    "split_quantity": item_request.quantity,
+                    "item_amount": item_amount,
+                }
+            )
 
         # Create the split order
         split_order = Order(
@@ -421,12 +421,12 @@ async def split_order(
 
         # Update original order items
         for item_data in items_to_update:
-            original_item = item_data['original_item']
-            split_quantity = item_data['split_quantity']
+            original_item = item_data["original_item"]
+            split_quantity = item_data["split_quantity"]
 
             # Reduce quantity in original order
             original_item.quantity -= split_quantity
-            original_order.total_amount -= item_data['item_amount']
+            original_order.total_amount -= item_data["item_amount"]
 
             # Remove item if quantity reaches zero
             if original_item.quantity <= 0:
@@ -445,7 +445,7 @@ async def split_order(
             company_id=split_order.company_id,
             current_user=current_user,
             _id=split_order.id,
-            amount=original_order.total_amount-(split_order.total_amount),
+            amount=original_order.total_amount - (split_order.total_amount),
         )
         split_order.payment_url = split_order_payment_link
         original_order.payment_url = original_order_payment_link
@@ -491,15 +491,11 @@ async def split_order(
     except Exception as e:
         await db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail=f"Order splitting failed: {str(e)}"
-        )
+            status_code=500, detail=f"Order splitting failed: {str(e)}")
 
 
 async def get_split_orders(
-    original_order_id: UUID,
-    current_user: User,
-    db: AsyncSession
+    original_order_id: UUID, current_user: User, db: AsyncSession
 ) -> list[OrderResponse]:
     """
     Retrieve the original order and all orders that were split from it
@@ -509,27 +505,20 @@ async def get_split_orders(
         select(Order)
         .where(Order.id == original_order_id)
         .where(Order.guest_id == current_user.id)
-        .options(
-            selectinload(Order.order_items)
-            .joinedload(OrderItem.item)
-        )
+        .options(selectinload(Order.order_items).joinedload(OrderItem.item))
     )
     original_order = original_order.scalar_one_or_none()
 
     if not original_order:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Original order not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Original order not found"
         )
 
     # Get all split orders with their items
     split_orders_result = await db.execute(
         select(Order)
         .where(Order.original_order_id == original_order_id)
-        .options(
-            selectinload(Order.order_items)
-            .joinedload(OrderItem.item)
-        )
+        .options(selectinload(Order.order_items).joinedload(OrderItem.item))
     )
     split_orders = split_orders_result.scalars().all()
 
@@ -548,27 +537,28 @@ async def get_split_orders(
             for order_item in order.order_items
         ]
 
-        response.append(OrderResponse(
-            id=order.id,
-            guest_id=order.guest_id,
-            room_or_table_number=order.room_or_table_number,
-            total_amount=order.total_amount,
-            status=order.status.value if hasattr(
-                order.status, 'value') else order.status,
-            payment_url=order.payment_url,
-            original_order_id=order.original_order_id,
-            order_items=order_items_response,
-            is_split=order.is_split,
-            notes=order.notes
-        ))
+        response.append(
+            OrderResponse(
+                id=order.id,
+                guest_id=order.guest_id,
+                room_or_table_number=order.room_or_table_number,
+                total_amount=order.total_amount,
+                status=order.status.value
+                if hasattr(order.status, "value")
+                else order.status,
+                payment_url=order.payment_url,
+                original_order_id=order.original_order_id,
+                order_items=order_items_response,
+                is_split=order.is_split,
+                notes=order.notes,
+            )
+        )
 
     return response
 
 
 async def delete_split_order(
-    split_order_id: UUID,
-    current_user: User,
-    db: AsyncSession
+    split_order_id: UUID, current_user: User, db: AsyncSession
 ) -> None:
     """
     Delete a split order and return its items to the original order.
@@ -582,33 +572,27 @@ async def delete_split_order(
             .where(Order.id == split_order_id)
             .where(Order.guest_id == current_user.id)
             .where(Order.is_split == True)
-            .options(
-                selectinload(Order.order_items)
-                .joinedload(OrderItem.item)
-            )
+            .options(selectinload(Order.order_items).joinedload(OrderItem.item))
         )
         split_order = split_order.scalar_one_or_none()
 
         if not split_order:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Split order not found or not eligible for deletion"
+                detail="Split order not found or not eligible for deletion",
             )
 
         if not split_order.original_order_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This is not a split order"
+                detail="This is not a split order",
             )
 
         # Get the original order with items
         original_order = await db.execute(
             select(Order)
             .where(Order.id == split_order.original_order_id)
-            .options(
-                selectinload(Order.order_items)
-                .joinedload(OrderItem.item)
-            )
+            .options(selectinload(Order.order_items).joinedload(OrderItem.item))
             .with_for_update()  # Lock for update
         )
         original_order = original_order.scalar_one_or_none()
@@ -617,8 +601,13 @@ async def delete_split_order(
         for split_item in split_order.order_items:
             # Find corresponding item in original order
             original_item = next(
-                (oi for oi in original_order.order_items
-                 if oi.item_id == split_item.item_id), None)
+                (
+                    oi
+                    for oi in original_order.order_items
+                    if oi.item_id == split_item.item_id
+                ),
+                None,
+            )
 
             if original_item:
                 # Item exists in original order - just increase quantity
@@ -628,7 +617,7 @@ async def delete_split_order(
                 new_order_item = OrderItem(
                     item_id=split_item.item_id,
                     quantity=split_item.quantity,
-                    price=split_item.price
+                    price=split_item.price,
                 )
                 original_order.order_items.append(new_order_item)
 
@@ -661,12 +650,13 @@ async def delete_split_order(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete split order: {str(e)}"
+            detail=f"Failed to delete split order: {str(e)}",
         )
 
 
 async def get_user_or_company_orders(current_user: User, db: AsyncSession):
-    user_id = check_current_user_id(current_user)
+    user_id = get_company_id(current_user) if (
+        current_user.user_type == UserType.COMPANY or current_user.user_type == UserType.STAFF)else current_user.id
 
     company_orders_cache_key = f"orders:company:{user_id}"
     guest_orders_cache_key = f"orders:guest:{user_id}"
@@ -683,10 +673,7 @@ async def get_user_or_company_orders(current_user: User, db: AsyncSession):
 
     result = await db.execute(
         select(Order)
-        .options(
-            selectinload(Order.order_items)
-            .joinedload(OrderItem.item)
-        )
+        .options(selectinload(Order.order_items).joinedload(OrderItem.item))
         .where(or_(Order.company_id == user_id, Order.guest_id == current_user.id))
     )
 
@@ -699,7 +686,7 @@ async def get_user_or_company_orders(current_user: User, db: AsyncSession):
                 item_id=order_item.item_id,
                 quantity=order_item.quantity,
                 price=order_item.price,
-                name=order_item.item.name
+                name=order_item.item.name,
             )
             for order_item in order.order_items
         ]
@@ -712,13 +699,14 @@ async def get_user_or_company_orders(current_user: User, db: AsyncSession):
             room_or_table_number=order.room_or_table_number,
             payment_url=order.payment_url or "",  # Handle None values
             notes=order.notes,
-            order_items=order_items_response
+            order_items=order_items_response,
         )
         order_responses.append(order_response)
 
         # Cache the results
-        cache_data = json.dumps([order.model_dump()
-                                for order in order_responses], default=str)
+        cache_data = json.dumps(
+            [order.model_dump() for order in order_responses], default=str
+        )
         if current_user.user_type == UserType.GUEST:
             redis_client.set(guest_orders_cache_key,
                              cache_data, ex=settings.REDIS_EX)
@@ -734,7 +722,7 @@ async def update_order_status(
 ):
     check_permission(user=current_user, required_permission="update_orders")
 
-    user_id = check_current_user_id(current_user)
+    user_id = get_company_id(current_user)
     stmt = select(Order).where(Order.id == order_id,
                                Order.company_id == user_id)
 

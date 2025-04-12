@@ -19,16 +19,16 @@ class ReservationBase(BaseModel):
     arrival_date: date
     arrival_time: time
     number_of_guests: int
-    children: int | None
+    children: int | None = None
     notes: str | None = None
-    deposit_amount: Decimal | None
+    deposit_amount: Decimal | None = None
 
 
 class ReservationCreate(ReservationBase):
     company_id: UUID
-    guest_name: str | None
-    guest_email: EmailStr | None
-    guest_phone: str | None
+    guest_name: str | None = None
+    guest_email: EmailStr | None = None
+    guest_phone: str | None = None
 
 
 class ReservationUpdate(BaseModel):
@@ -49,6 +49,6 @@ class ReservationResponse(ReservationBase):
     guest_phone: str
     status: ReservationStatus
     payment_status: PaymentStatus
-    payment_url: str
+    payment_url: str | None = None
     created_at: datetime
     updated_at: datetime

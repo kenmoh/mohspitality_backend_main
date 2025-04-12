@@ -138,8 +138,9 @@ class UserProfile(Base):
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    rate_amount: Mapped[Decimal] = mapped_column(nullable=False)
-    pay_type: Mapped[PayType] = mapped_column(default=PayType.MONTHLY)
+    rate_amount: Mapped[Decimal] = mapped_column(nullable=True)
+    pay_type: Mapped[PayType] = mapped_column(
+        default=PayType.MONTHLY, nullable=True)
     user = relationship("User", back_populates="user_profile")
 
 
@@ -546,6 +547,7 @@ class Order(Base):
     )
 
     user = relationship("User", back_populates="orders", lazy="selectin")
+    payment = relationship("Payment", back_populates='order')
 
 
 class OrderItem(Base):
@@ -594,7 +596,6 @@ class Reservation(Base):
     status: Mapped[ReservationStatus] = mapped_column(
         default=ReservationStatus.PENDING)
     notes: Mapped[str] = mapped_column(nullable=True)
-
     deposit_amount: Mapped[Decimal] = mapped_column(nullable=True, default=0.0)
     payment_status: Mapped[PaymentStatus] = mapped_column(
         default=PaymentStatus.PENDING)
@@ -616,6 +617,7 @@ class Reservation(Base):
     company = relationship(
         "User", back_populates="company_reservations", foreign_keys=[company_id]
     )
+    payment = relationship("Payment", back_populates='reservation')
 
 
 class MeetingRoom(Base):
@@ -690,7 +692,7 @@ class EventBooking(Base):
     seat_arrangement_id: Mapped[int] = mapped_column(
         ForeignKey("seat_arrangements.id"), nullable=True
     )
-    name: Mapped[str]
+    name: Mapped[str]  # Event company name
     staff_name: Mapped[str] = mapped_column(nullable=True)
     notes: Mapped[str] = mapped_column(nullable=True)
     special_requests: Mapped[str] = mapped_column(nullable=True)
@@ -740,6 +742,7 @@ class EventBooking(Base):
     menu_items: Mapped[list["EventMenuItem"]] = relationship(
         "EventMenuItem", secondary="event_booking_menu_items", back_populates="bookings"
     )
+    payment = relationship("Payment", back_populates='event')
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -761,6 +764,7 @@ class EventMenuItem(Base):
     )
 
     image_url: Mapped[str] = mapped_column(nullable=True)
+    min_serving_size: Mapped[int] = mapped_column(nullable=False, default=1)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -790,3 +794,25 @@ class EventBookingMenuItem(Base):
     menu_item_id: Mapped[int] = mapped_column(
         ForeignKey("event_menu_items.id", ondelete="CASCADE"), primary_key=True
     )
+
+
+class Payment(Base):
+    __tablename__ = 'payments'
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid.uuid1)
+    order_id: Mapped[UUID] = mapped_column(
+        ForeignKey('orders.id'), nullable=True)
+    reservation_id: Mapped[int] = mapped_column(
+        ForeignKey('reservations.id'), nullable=True)
+    event_id: Mapped[int] = mapped_column(
+        ForeignKey('event_bookings.id'), nullable=True)
+    amount: Mapped[Decimal]
+    method: Mapped[str] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column()
+    transaction_id: Mapped[str] = mapped_column()
+    created_at = mapped_column(DateTime, default=func.now())
+
+    # Relationships
+    order = relationship("Order", back_populates='payment')
+    reservation = relationship("Reservation", back_populates='payment')
+    event = relationship("EventBooking", back_populates='payment')

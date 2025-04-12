@@ -39,7 +39,6 @@ async def create_meeting_room(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MeetingRoomResponse:
-
     return await event_service.create_meeting_room(room_data, db, current_user)
 
 
@@ -48,9 +47,8 @@ async def get_company_rooms(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[MeetingRoomResponse]:
-    return await event_service.get_company_meeting_rooms(
-        db, current_user
-    )
+    return await event_service.get_company_meeting_rooms(db, current_user)
+
 
 @router.get("/{room_id}/rooms", status_code=status.HTTP_200_OK)
 async def get_meeting_room(
@@ -59,7 +57,6 @@ async def get_meeting_room(
     db: AsyncSession = Depends(get_db),
 ) -> MeetingRoomResponse:
     return await event_service.get_meeting_room(room_id, db, current_user)
-
 
 
 @router.put("/{room_id}/rooms", status_code=status.HTTP_202_ACCEPTED)
@@ -104,29 +101,12 @@ async def get_seat_arrangement(
     return await event_service.get_seat_arrangement(arrangement_id, db, current_user)
 
 
-@router.get("/company/arrangements", status_code=status.HTTP_200_OK)
+@router.get("/company-seat-arrangements", status_code=status.HTTP_200_OK)
 async def get_company_arrangements(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1),
-    is_available: Optional[bool] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[SeatArrangementResponse]:
-    return await event_service.get_company_seat_arrangements(
-        db, current_user, skip, limit, is_available
-    )
-
-
-@router.put("/{arrangement_id}/arrangements", status_code=status.HTTP_202_ACCEPTED)
-async def update_seat_arrangement(
-    arrangement_id: int,
-    arrangement_data: SeatArrangementUpdate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> SeatArrangementResponse:
-    return await event_service.update_seat_arrangement(
-        arrangement_id, arrangement_data, db, current_user
-    )
+    return await event_service.get_company_seat_arrangements(db, current_user)
 
 
 @router.delete("/{arrangement_id}/arrangements", status_code=status.HTTP_204_NO_CONTENT)
@@ -159,18 +139,12 @@ async def get_menu_item(
     return await event_service.get_menu_item(item_id, db, current_user)
 
 
-@router.get("/company/menu-items", status_code=status.HTTP_200_OK)
+@router.get("/company-menu-items", status_code=status.HTTP_200_OK)
 async def get_company_menu_items(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1),
-    is_available: Optional[bool] = None,
-    category: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[EventMenuItemResponse]:
-    return await event_service.get_company_menu_items(
-        db, current_user, skip, limit, is_available, category
-    )
+    return await event_service.get_company_menu_items(db, current_user)
 
 
 @router.put("/{item_id}/menu-items", status_code=status.HTTP_202_ACCEPTED)
@@ -195,14 +169,19 @@ async def delete_menu_item(
 # Event Booking Routes
 
 
-@router.post("/{}/bookings", status_code=status.HTTP_201_CREATED)
+@router.post("/{company_id}/bookings", status_code=status.HTTP_201_CREATED)
 async def create_event_booking(
     company_id: UUID,
     booking_data: EventBookingCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> EventBookingResponse:
-    return await event_service.create_event_booking(booking_data=booking_data, company_id=company_id, db=db, current_user=current_user)
+    return await event_service.create_event_booking(
+        booking_data=booking_data,
+        company_id=company_id,
+        db=db,
+        current_user=current_user,
+    )
 
 
 @router.get("/{booking_id}/bookings", status_code=status.HTTP_200_OK)

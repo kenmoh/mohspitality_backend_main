@@ -3,7 +3,7 @@ from datetime import datetime, date, time
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class EventStatus(str, Enum):
@@ -117,21 +117,18 @@ class EventMenuItemUpdate(BaseModel):
     serving_size: Optional[int] = None
 
 
-class EventMenuItemResponse(EventMenuItemBase):
-    id: int
-    company_id: UUID
-    created_at: datetime
-    updated_at: datetime
+# class EventMenuItemResponse(EventMenuItemBase):
+#     id: int
+#     company_id: UUID
+#     created_at: datetime
+#     updated_at: datetime
 
 
 class EventMenuItemBase(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str
     price: Decimal
-    category: str
-    is_available: bool = True
-    dietary_info: Optional[str] = None
-    serving_size: Optional[int] = None
+    min_serving_size: int = Field(ge=1, default=1)
 
 
 class EventMenuItemCreate(EventMenuItemBase):
@@ -160,9 +157,8 @@ class EventBookingBase(BaseModel):
     arrival_time: time
     end_date: Optional[date] = None
     end_time: time
-    event_type: str
-    event_theme: Optional[str] = None
-    number_of_guests: int
+    name: Optional[str] = None
+    number_of_guest: int
     event_duration: int
     requires_catering: bool = True
     requires_decoration: bool = False
@@ -182,9 +178,10 @@ class EventBookingBase(BaseModel):
 #     guest_phone: Optional[str] = None
 #     deposit_amount: Optional[Decimal] = None
 
+
 class EventBookingCreate(EventBookingBase):
     selected_menu_items: Optional[List[int]] = None
-    room_name: Optional[int] = None
+    selected_room: Optional[int] = None
     selected_arrangement: Optional[int] = None
     guest_name: Optional[str] = None
     guest_email: Optional[EmailStr] = None
