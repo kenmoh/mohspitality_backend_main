@@ -15,6 +15,7 @@ from app.models.models import (
     CompanyProfile,
     User,
     Rate,
+    NavItem,
 )
 
 from app.schemas.profile_schema import (
@@ -163,7 +164,7 @@ from app.utils.utils import encrypt_data, get_company_id
 # #         company_user: The company user for which to create roles
 
 # #     Returns:
-# #         List of created roles
+# List of created roles
 # #     """
 
 # #     action_resource_list = [
@@ -709,7 +710,7 @@ async def get_all_company_staff_roles(
     return result.scalars().all()
 
 
-async def create_department(
+async def create_department1(
     current_user: User, data: DepartmentCreate, db: AsyncSession
 ):
     check_permission(current_user, required_permission="create_departments")
@@ -728,6 +729,53 @@ async def create_department(
 
         return department
 
+    except Exception as e:
+        error_detail = str(e)
+
+        if "department_name" in error_detail:
+            # Extract the key and value from the error message
+            key_match = re.search(r"Key \((\w+)\)=\((\w+)\)", error_detail)
+            if key_match:
+                key, value = key_match.groups()
+                raise Exception(
+                    f"A department with this {key} '{value}' already exists for this company"
+                )
+
+
+async def create_department(
+    current_user: User,
+    data: DepartmentCreate,
+    db: AsyncSession,
+):
+    """Adds existing NavItems to a Department."""
+    check_permission(current_user, required_permission="create_departments")
+
+    try:
+        # Create Department
+        department = Department(
+            name=data.name.lower(),
+            company_id=current_user.id,
+        )
+
+        # Add department to database
+        db.add(department)
+        await db.flush()
+
+        # Fetch the NavItems
+        if data.nav_items:
+            for nav_item_id in data.nav_items:
+                nav_item = await db.get(NavItem, nav_item_id)
+                if not nav_item:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"NavItem with id {nav_item_id} not found",
+                    )
+                department.nav_items.append(nav_item)
+
+        await db.commit()
+        await db.refresh(department)
+
+        return department
     except Exception as e:
         error_detail = str(e)
 

@@ -1,3 +1,4 @@
+from sqlalchemy import Table, Column, Integer, ForeignKey, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid import UUID
 from decimal import Decimal
@@ -212,6 +213,9 @@ class Department(Base):
 
     name: Mapped[str] = mapped_column(unique=False)
     user = relationship("User", back_populates="departments")
+    nav_items: Mapped[list["NavItem"]] = relationship(
+        secondary="department_nav_item_association", back_populates="departments"
+    )
     __table_args__ = (UniqueConstraint(
         "name", "company_id", name="department_name"),)
 
@@ -221,12 +225,16 @@ class Notification(Base):
     id: Mapped[int] = mapped_column(
         primary_key=True, nullable=False, index=True, autoincrement=True
     )
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     company_id: Mapped[UUID]
-
     message: Mapped[str] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+    user = relationship("User")
 
 
 class NoPost(Base):
@@ -455,7 +463,9 @@ class NavItem(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     path_name: Mapped[str] = mapped_column(nullable=False)
     path: Mapped[str] = mapped_column(nullable=False)
-    show: Mapped[bool] = mapped_column(nullable=False, default=True)
+    departments: Mapped[list["Department"]] = relationship(
+        secondary="department_nav_item_association", back_populates="nav_items"
+    )
 
 
 class ItemStock(Base):
@@ -725,6 +735,7 @@ class EventBooking(Base):
         nullable=False, default=Decimal("0.00")
     )
     deposit_amount: Mapped[Decimal] = mapped_column(nullable=True)
+    balance: Mapped[Decimal] = mapped_column(nullable=True)
     payment_status: Mapped[PaymentStatus] = mapped_column(
         default=PaymentStatus.PENDING)
     payment_url: Mapped[str] = mapped_column(nullable=True)
@@ -816,3 +827,14 @@ class Payment(Base):
     order = relationship("Order", back_populates='payment')
     reservation = relationship("Reservation", back_populates='payment')
     event = relationship("EventBooking", back_populates='payment')
+
+
+# Association Table
+department_nav_item_association = Table(
+    "department_nav_item_association",
+    Base.metadata,
+    Column("department_id", ForeignKey(
+        "departments.id", ondelete="CASCADE"), primary_key=True),
+    Column("nav_item_id", ForeignKey("nav_items.id",
+           ondelete="CASCADE"), primary_key=True),
+)

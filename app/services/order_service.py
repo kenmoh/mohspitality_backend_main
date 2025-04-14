@@ -21,6 +21,7 @@ from app.schemas.user_schema import UserType
 from app.config.config import redis_client, settings
 from app.services.profile_service import check_permission
 from app.utils.utils import get_company_id, get_order_payment_link
+from app.services.notification_service import manager
 
 
 async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: User):
@@ -150,6 +151,9 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
         guest_orders_cache_key = f"orders:guest:{current_user.id}"
         redis_client.delete(company_orders_cache_key)
         redis_client.delete(guest_orders_cache_key)
+
+        # Notify company about the new order
+        await manager.notify_new_order(company_id=response.company_id, room_or_table_number=response.room_or_table_number)
 
         return response
 

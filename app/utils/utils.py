@@ -1,7 +1,7 @@
 from decimal import Decimal
 import uuid
 import httpx
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from cryptography.fernet import Fernet
@@ -111,3 +111,20 @@ def get_company_id(current_user: User):
         company_id = current_user.company_id
 
     return company_id
+
+
+def verify_transaction_tx_ref(tx_ref: str):
+
+    try:
+        headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}
+        response = requests.get(
+            f"{flutterwave_base_url}/transactions/verify_by_reference?tx_ref={tx_ref}",
+            headers=headers,
+        )
+        response_data = response.json()
+        return response_data
+    except requests.RequestException:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Error connecting to Flutterwave Server",
+        )

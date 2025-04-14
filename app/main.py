@@ -11,36 +11,16 @@ from app.routes import (
     event_router,
     qrcode_router,
     reservation_router,
+    staff_attendance_routes,
     user_router,
     item_router,
     order_router,
+    payroll_routes,
+    staff_attendance_routes,
+    notification_routes
 )
 from app.services.profile_service import pre_create_permissions, setup_company_roles
 from app.services.qrcode_service import initialize_qr_code_limits
-
-
-# @asynccontextmanager
-# async def lifespan(application: FastAPI):
-#     db = AsyncSessionLocal()
-#     try:
-#         await pre_create_permissions(db)
-#         await initialize_qr_code_limits(db)
-#         # await setup_company_roles(db)
-#         yield {"db": db, "redis": redis_client}
-#     finally:
-#         await db.close()
-
-
-# @asynccontextmanager
-# async def lifespan(application: FastAPI):
-#     async with AsyncSessionLocal() as db:
-#         try:
-#             await pre_create_permissions(db)
-#             await initialize_qr_code_limits(db)
-#             # await setup_company_roles(db)
-#             yield {"db": db, "redis": redis_client}
-#         finally:
-#             await db.close()
 
 
 @asynccontextmanager
@@ -72,3 +52,6 @@ app.include_router(item_router.router)
 app.include_router(order_router.router)
 app.include_router(event_router.router)
 app.include_router(reservation_router.router)
+app.include_router(payroll_routes.router)
+app.include_router(staff_attendance_routes.router)
+app.include_router(notification_routes.router)
