@@ -135,7 +135,9 @@ class UserProfile(Base):
     )
     full_name: Mapped[str] = mapped_column()
     phone_number: Mapped[str] = mapped_column(unique=True)
-    department: Mapped[str] = mapped_column(nullable=True)
+    department_id: Mapped[int] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
+    )
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -143,6 +145,7 @@ class UserProfile(Base):
     pay_type: Mapped[PayType] = mapped_column(
         default=PayType.MONTHLY, nullable=True)
     user = relationship("User", back_populates="user_profile")
+    department = relationship("Department", back_populates="user_profiles")
 
 
 class CompanyProfile(Base):
@@ -214,8 +217,10 @@ class Department(Base):
     name: Mapped[str] = mapped_column(unique=False)
     user = relationship("User", back_populates="departments")
     nav_items: Mapped[list["NavItem"]] = relationship(
-        secondary="department_nav_item_association", back_populates="departments"
+        secondary="department_nav_item_association", back_populates="departments",
+        lazy="selectin",
     )
+    user_profiles = relationship("UserProfile", back_populates="department")
     __table_args__ = (UniqueConstraint(
         "name", "company_id", name="department_name"),)
 
@@ -300,6 +305,8 @@ class RefreshToken(Base):
         primary_key=True, nullable=False, default=uuid.uuid1, index=True
     )
     token: Mapped[str] = mapped_column(unique=True, index=True, nullable=False)
+    user_type: Mapped[str] = mapped_column(
+        nullable=True)  # TODO: change to False
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

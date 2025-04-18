@@ -17,7 +17,7 @@ from app.routes import (
     order_router,
     payroll_routes,
     staff_attendance_routes,
-    notification_routes
+    #notification_routes
 )
 from app.services.profile_service import pre_create_permissions, setup_company_roles
 from app.services.qrcode_service import initialize_qr_code_limits
@@ -54,4 +54,4 @@ app.include_router(event_router.router)
 app.include_router(reservation_router.router)
 app.include_router(payroll_routes.router)
 app.include_router(staff_attendance_routes.router)
-app.include_router(notification_routes.router)
+#app.include_router(notification_routes.router)

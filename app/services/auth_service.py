@@ -3,7 +3,7 @@ from fastapi import BackgroundTasks, HTTPException, status
 from fastapi_mail import FastMail
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from sqlalchemy import select
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from app.config.config import settings
@@ -206,55 +206,49 @@ async def company_create_staff_user(
     check_permission(user=current_user, required_permission="create_users")
 
     email_exists = await db.execute(select(User).where(User.email == user_data.email))
+    #result = await db.execcute(select(Role).where(Role.company_id == current_user.id))
+    #role = scalar_one_or_none()
+    
     if email_exists.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
 
-    async with db.begin():
-        # Create the user first
-        new_staff = User(
-            email=user_data.email,
-            password=hash_password(user_data.password),  # Hash password
-            user_type=UserType.STAFF,
-            company_id=current_user.id,
-            subscription_type=current_user.subscription_type,
-            role_id=role.id,
-            updated_at=datetime.now(),
-        )
-        db.add(new_staff)
-        await db.flush()  # Get the new user ID
+    # Create the user first
+    new_staff = User(
+        email=user_data.email,
+        password=hash_password(user_data.password),  # Hash password
+        user_type=UserType.STAFF,
+        company_id=current_user.id,
+        subscription_type=current_user.subscription_type,
+        #role_id=role.id,
+        updated_at=datetime.now(),
+    )
+    db.add(new_staff)
+    await db.flush()
 
-        # Get company role by name
-        role = await get_role_by_name(
-            role_name=user_data.role_name, current_user=current_user, db=db
-        )
-
-        if not role:
-            raise HTTPException(
-                status_code=400, detail=f"Role '{role.name}' not found in your company"
-            )
-
-        # Create the role assignment
-
-        # Set as primary role
-        new_staff.role_id = role.id
-
-        await db.commit()
-        await db.refresh(new_staff)
-
-        await create_staff_subscription(
-            db=db, staff_user=new_staff, current_user=current_user
+    # Get company role by name
+    role = await get_role_by_name(
+        role_name=user_data.role_name, current_user=current_user, db=db
+    )
+    
+    if not role:
+        raise HTTPException(
+            status_code=400, detail=f"Role '{role.name}' not found in your company"
         )
 
-        return new_staff
 
-        # return {
-        #     "id": new_staff.id,
-        #     "email": new_staff.email,
-        #     "assigned_role": new_staff.role_name if staff_data.role_name else None,
-        #     "company_id": current_user.id
-        # }
+    # Set as primary role
+    new_staff.role_id = role.id
+
+    await db.commit()
+    await db.refresh(new_staff)
+
+    await create_staff_subscription(
+        db=db, staff_user=new_staff, current_user=current_user
+    )
+
+    return new_staff
 
 
 # async def company_create_staff_user(

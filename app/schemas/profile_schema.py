@@ -10,7 +10,7 @@ class CreateUserProfileBase(BaseModel):
 
 
 class CreateStaffUserProfile(CreateUserProfileBase):
-    department: str
+    department_id: int
 
 
 class CreateCompanyProfile(BaseModel):

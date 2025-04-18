@@ -189,6 +189,7 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    user_type: str
 
 
 class UserResponse(UserBase):
@@ -219,13 +220,28 @@ class StaffRoleCreate(BaseModel):
     name: str
 
 
+class NavItemResponse(BaseModel):
+    id: int
+    path_name: str
+    path: str
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentResponse(BaseModel):
+    id: int
+    company_id: UUID
+    name: str
+    nav_items: list[NavItemResponse]
+
+    class Config:
+        from_attributes = True
+
+
 class DepartmentCreate(BaseModel):
     name: str
     nav_items: list[int] = []
-
-
-class DepartmentResponse(DepartmentCreate):
-    id: int
 
 
 class Permission(BaseModel):
@@ -262,3 +278,35 @@ class RoleCreateResponse(StaffRoleCreate):
 
 class AssignRoleToStaff(BaseModel):
     name: str
+
+
+class UserProfileResponse(BaseModel):
+    full_name: str
+    user_type: str
+    phone_number: str
+    user_id: UUID
+    department: DepartmentResponse
+
+    class Config:
+        from_attributes = True
+
+
+"""
+{
+  "full_name": "Kenneth",
+  "phone_number": "090990099889",
+  "user_id": "090990099889",
+  "department": {
+    "id": 15,
+    "name": "kitchen",
+    "nav_items": [
+      {
+        "id": 1,
+        "path_name": "staff",
+        "path": "/staff"
+      }
+    ]
+  }
+}
+
+"""

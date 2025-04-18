@@ -29,7 +29,9 @@ from app.schemas.user_schema import (
     PermissionResponse,
     RoleCreateResponse,
     StaffRoleCreate,
+    UserProfileResponse,
     UserResponse,
+    NavItemResponse
 )
 from app.services import profile_service
 
@@ -71,10 +73,24 @@ async def create_staff_profile(
     data: CreateStaffUserProfile,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> CreateStaffUserProfile:
+) -> UserProfileResponse:
     try:
         return await profile_service.create_staff_profile(
             db=db, data=data, current_user=current_user
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.get("/me", status_code=status.HTTP_200_OK)
+async def get_user_profile(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserProfileResponse:
+    try:
+        return await profile_service.get_user_profile(
+            db=db,  current_user=current_user
         )
     except Exception as e:
         raise HTTPException(
@@ -247,6 +263,19 @@ async def get_company_department(
         return await profile_service.get_company_departments(
             db=db,
             current_user=current_user,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/nav-items", status_code=status.HTTP_200_OK)
+async def get_nav_items(
+    db: AsyncSession = Depends(get_db),
+) -> list[NavItemResponse]:
+    try:
+        return await profile_service.get_nav_items(
+            db=db,
         )
     except Exception as e:
         raise HTTPException(

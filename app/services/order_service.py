@@ -153,7 +153,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
         redis_client.delete(guest_orders_cache_key)
 
         # Notify company about the new order
-        await manager.notify_new_order(company_id=response.company_id, room_or_table_number=response.room_or_table_number)
+        #await manager.notify_new_order(company_id=response.company_id, room_or_table_number=response.room_or_table_number)
 
         return response
 

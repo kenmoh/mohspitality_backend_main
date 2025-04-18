@@ -28,7 +28,7 @@ async def login_user(
 ) -> TokenResponse:
     try:
         user = await auth_service.login_user(login_data=user_credentials, db=db)
-        return await create_tokens(user_id=user.id, db=db)
+        return await create_tokens(user_id=user.id, user_type=user.user_type, db=db)
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

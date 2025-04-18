@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from psycopg2 import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 from app.models.models import (
     Department,
     NoPost,
@@ -43,7 +44,9 @@ from app.schemas.user_schema import (
     RoleCreateResponse,
     RolePermissionResponse,
     StaffRoleCreate,
+    UserProfileResponse,
     UserType,
+    NavItemResponse
 )
 from app.utils.utils import encrypt_data, get_company_id
 
@@ -311,12 +314,6 @@ async def setup_company_roles(db: AsyncSession, company_id: UUID):
     Returns:
         List of created roles
     """
-
-    # action_resource_list = [
-    #     f"{action.value}_{resource.value}"
-    #     for action in ActionEnum
-    #     for resource in ResourceEnum
-    # ]
     result = await db.execute(select(Permission.name))
     action_resource_list = set(result.scalars().all())
 
@@ -445,24 +442,79 @@ async def create_guest_profile(
 
 async def create_staff_profile(
     db: AsyncSession, data: CreateStaffUserProfile, current_user: User
-) -> CreateStaffUserProfile:
+) -> UserProfileResponse:
     try:
+        # Ensure department exists
+        stmt = select(Department).where(Department.id == data.department_id)
+        result = await db.execute(stmt)
+        department = result.scalar_one_or_none()
+        if not department:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Department not found"
+            )
+
         # Create Profile
         staff_profile = UserProfile(
-            full_name=data.company_name,
+            full_name=data.full_name,
             phone_number=data.phone_number,
-            department=data.department,
+            department_id=data.department_id,
             user_id=current_user.id,
         )
 
-        # Add user to database
         db.add(staff_profile)
         await db.commit()
-        await db.refresh(staff_profile)
+        await db.refresh(staff_profile, ["department"])
 
+        # Optionally, return a response model with department relation loaded
         return staff_profile
     except Exception as e:
         raise e
+
+
+async def get_user_profile(current_user: User, db: AsyncSession) -> UserProfileResponse:
+    stmt = (
+        select(UserProfile)
+        .where(UserProfile.user_id == current_user.id)
+        .options(
+            joinedload(UserProfile.department).joinedload(Department.nav_items)
+        )
+    )
+    result = await db.execute(stmt)
+    profile = result.unique().scalar_one_or_none()
+
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found"
+        )
+
+    department = profile.department
+    department_data = None
+    if (department):
+        department_data = {
+            "id": department.id,
+            "name": department.name,
+            "company_id":department.company_id,
+            "nav_items": [
+                {
+                    "id": nav_item.id,
+                    "path_name": nav_item.path_name,
+                    "path": nav_item.path
+                }
+                for nav_item in department.nav_items
+            ]
+        }
+
+    profile_dict = {
+        "full_name": profile.full_name,
+        "user_type": current_user.user_type,
+        "phone_number": profile.phone_number,
+        "user_id": str(profile.user_id),
+        "department": department_data
+    }
+
+    return UserProfileResponse.model_validate(profile_dict)
 
 
 async def update_company_profile(
@@ -742,7 +794,7 @@ async def create_department1(
                 )
 
 
-async def create_department(
+async def create_department2(
     current_user: User,
     data: DepartmentCreate,
     db: AsyncSession,
@@ -789,15 +841,113 @@ async def create_department(
                 )
 
 
+async def create_department(
+    current_user: User,
+    data: DepartmentCreate,
+    db: AsyncSession,
+):
+    """Adds existing NavItems to a Department."""
+    check_permission(current_user, required_permission="create_departments")
+
+    try:
+        # First check if department with this name already exists for the company
+        existing_stmt = select(Department).where(
+            Department.name == data.name.lower(),
+            Department.company_id == current_user.id
+        )
+        existing_result = await db.execute(existing_stmt)
+        if existing_result.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"A department with this name '{data.name}' already exists for this company"
+            )
+
+        # Create Department
+        department = Department(
+            name=data.name.lower(),
+            company_id=current_user.id,
+        )
+
+        # Add department to database
+        db.add(department)
+        await db.flush()
+        await db.refresh(department)
+
+        # Prepare a list for explicitly loaded nav_items
+        nav_items_data = []
+
+        # Fetch and add the NavItems if they exist
+        if data.nav_items and len(data.nav_items) > 0:
+            # Use a proper async query to get all nav items at once
+            stmt = select(NavItem).where(NavItem.id.in_(data.nav_items))
+            result = await db.execute(stmt)
+            nav_items = result.scalars().all()
+
+            # Check if all requested nav_items were found
+            found_ids = {item.id for item in nav_items}
+            missing_ids = set(data.nav_items) - found_ids
+
+            if missing_ids:
+                await db.rollback()  # Important to rollback before raising
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"NavItem(s) with id(s) {', '.join(str(id) for id in missing_ids)} not found",
+                )
+
+            # Add the nav_items to the department
+            department.nav_items.extend(nav_items)
+            await db.flush()  # Ensure the relationship is saved
+
+            # Collect data for each nav_item to include in response
+            nav_items_data = [{
+                "id": nav_item.id,
+                "path_name": nav_item.path_name,
+                "path": nav_item.path,
+            } for nav_item in nav_items]
+
+        await db.commit()
+
+        # Create a fully loaded response object
+        response_dept = {
+            "id": department.id,
+            "name": department.name,
+            "company_id": str(department.company_id),
+            "nav_items": nav_items_data
+        }
+
+        return response_dept
+
+    except HTTPException:
+        # Re-raise HTTPException as it's already properly formatted
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
 async def get_company_departments(
     current_user: User, db: AsyncSession
 ) -> list[DepartmentResponse]:
     company_id = get_company_id(current_user)
     stmt = select(Department).where(Department.company_id == company_id)
     result = await db.execute(stmt)
-    departments = result.all()
+    departments = result.unique().scalars().all()
 
-    return departments
+    return [DepartmentResponse.model_validate(department) for department in departments]
+
+
+async def get_nav_items(
+    db: AsyncSession
+) -> list[NavItemResponse]:
+
+    stmt = select(NavItem)
+    result = await db.execute(stmt)
+    nav_items = result.scalars().all()
+
+    return [NavItemResponse.model_validate(nav_item) for nav_item in nav_items]
 
 
 async def delete_company_department(

@@ -24,11 +24,11 @@ def create_access_token(data: dict) -> str:
     return encoded_jwt
 
 
-async def create_refresh_token(user_id: str, db: AsyncSession) -> str:
+async def create_refresh_token(user_id: str, user_type: str, db: AsyncSession) -> str:
     token = str(uuid.uuid4())
     expires_at = datetime.now() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
-    refresh_token = RefreshToken(token=token, user_id=user_id, expires_at=expires_at)
+    refresh_token = RefreshToken(token=token, user_id=user_id, user_type=user_type, expires_at=expires_at)
 
     db.add(refresh_token)
     await db.commit()
@@ -36,12 +36,12 @@ async def create_refresh_token(user_id: str, db: AsyncSession) -> str:
     return token
 
 
-async def create_tokens(user_id: str, db: AsyncSession) -> TokenResponse:
-    access_token = create_access_token({"sub": str(user_id)})
-    refresh_token = await create_refresh_token(user_id, db)
+async def create_tokens(user_id: str, user_type: str, db: AsyncSession) -> TokenResponse:
+    access_token = create_access_token({"sub": str(user_id), 'user_type': user_type})
+    refresh_token = await create_refresh_token(user_id, user_type, db)
 
     return TokenResponse(
-        access_token=access_token, refresh_token=refresh_token, token_type="bearer"
+        access_token=access_token, refresh_token=refresh_token, user_type=user_type, token_type="bearer"
     )
 
 
