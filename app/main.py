@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
@@ -25,7 +26,6 @@ from app.services.qrcode_service import initialize_qr_code_limits
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Just do your initialization with a new session
     async with AsyncSessionLocal() as db:
         await pre_create_permissions(db)
         await initialize_qr_code_limits(db)
@@ -39,7 +39,7 @@ app = FastAPI(
     description="Complete hospitality solutions",
     summary="QRCode food ordering, staff management, restaurant management and more...",
 )
-limiter = Limiter(key_func=get_remote_address, default_limits=["5/minute"])
+limiter = Limiter(key_func=get_remote_address, default_limits=["10/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -55,3 +55,24 @@ app.include_router(reservation_router.router)
 app.include_router(payroll_routes.router)
 app.include_router(staff_attendance_routes.router)
 #app.include_router(notification_routes.router)
+
+
+
+
+# Allow requests from your frontend
+origins=[
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost",
+    "http://192.168.43.188:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    #allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    
+)
+
