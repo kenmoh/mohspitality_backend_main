@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+import logfire
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
-from app.database.database import AsyncSessionLocal
+from app.database.database import AsyncSessionLocal, engine
+from app.config.config import settings
 
 from app.routes import (
     auth_router,
@@ -45,6 +47,13 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["10/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+
+# configure logfire
+logfire.configure(token=settings.LOGFIRE_TOKEN)
+logfire.instrument_sqlalchemy(engine=engine)
+logfire.instrument_fastapi(app, capture_headers=True)
+
 
 
 app.include_router(auth_router.router)
