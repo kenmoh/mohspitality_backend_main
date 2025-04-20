@@ -124,7 +124,12 @@ class UserCreate(UserBase):
 
 
 class StaffUserCreate(UserCreate):
-    role_name: str
+    #role_name: str
+    full_name: str
+    phone_number: str
+    department: int
+    role_id: int
+    pay_type: PayType
 
 
 class UserLogin(BaseModel):
@@ -194,12 +199,13 @@ class TokenResponse(BaseModel):
 
 class UserResponse(UserBase):
     id: UUID
-    is_active: bool
-    is_superuser: bool
     created_at: datetime
     company_id: UUID | None = None
-    role_id: int | None = None
-    # role: str | None = None
+    role_name: str | None = None
+    full_name: str | None = None
+    phone_number: str | None = None
+    department: str | None = None
+    pay_type: str | None = None
 
 
 class UserListResponse(BaseModel):

@@ -4,10 +4,11 @@ from fastapi_mail import FastMail
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from app.config.config import settings
-from app.models.models import PasswordReset, RefreshToken, User
+from app.models.models import PasswordReset, RefreshToken, User, UserProfile
 from app.schemas.user_schema import (
     MessageSchema,
     PasswordResetConfirm,
@@ -27,6 +28,7 @@ from app.services.profile_service import (
 )
 from app.services.subscription_service import create_staff_subscription
 from app.schemas.subscriptions import SubscriptionType
+from app.utils.utils import get_company_id
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -167,7 +169,8 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserRe
         The newly created user
     """
     # Check if email already exists
-    email_exists = await db.execute(select(User).where(User.email == user_data.email))
+    stmt = select(User).where(User.email == user_data.email)
+    email_exists = await db.execute(stmt)
     if email_exists.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
@@ -197,109 +200,73 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserRe
 async def company_create_staff_user(
     db: AsyncSession, user_data: StaffUserCreate, current_user: User
 ) -> UserResponse:
-    """
-    Create a staff user and optionally assign roles
-    """
+    """Create a staff user with profile in a single transaction"""
     if current_user.user_type != UserType.COMPANY:
         raise HTTPException(status_code=403, detail="Company admins only")
-
     check_permission(user=current_user, required_permission="create_users")
-
-    email_exists = await db.execute(select(User).where(User.email == user_data.email))
-    #result = await db.execcute(select(Role).where(Role.company_id == current_user.id))
-    #role = scalar_one_or_none()
     
+    # Check if email exists
+    stmt = select(User).where(User.email == user_data.email)
+    email_exists = await db.execute(stmt)
     if email_exists.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered"
         )
-
-    # Create the user first
-    new_staff = User(
-        email=user_data.email,
-        password=hash_password(user_data.password),  # Hash password
-        user_type=UserType.STAFF,
-        company_id=current_user.id,
-        subscription_type=current_user.subscription_type,
-        #role_id=role.id,
-        updated_at=datetime.now(),
-    )
-    db.add(new_staff)
-    await db.flush()
-
-    # Get company role by name
-    role = await get_role_by_name(
-        role_name=user_data.role_name, current_user=current_user, db=db
-    )
     
-    if not role:
-        raise HTTPException(
-            status_code=400, detail=f"Role '{role.name}' not found in your company"
+    try:
+        # Create the staff user
+        new_staff = User(
+            email=user_data.email,
+            password=hash_password(user_data.password),
+            user_type=UserType.STAFF,
+            company_id=current_user.id,
+            role_id=user_data.role_id,
+            subscription_type=current_user.subscription_type,
+            updated_at=datetime.now(),
         )
-
-
-    # Set as primary role
-    new_staff.role_id = role.id
-
-    await db.commit()
-    await db.refresh(new_staff)
-
-    await create_staff_subscription(
-        db=db, staff_user=new_staff, current_user=current_user
-    )
-
-    return new_staff
-
-
-# async def company_create_staff_user(
-#     db: AsyncSession, user_data: StaffUserCreate, current_user: User
-# ) -> UserResponse:
-#     """
-#     Create a new user in the database.
-
-#     Args:
-#         db: Database session
-#         user_data: User data from request
-#         company_id: ID of the company who is creating this user
-
-#     Returns:
-#         The newly created user
-#     """
-#     # check user permission
-#     check_permission(user=current_user, required_permission="create_users")
-
-#     # Check if email already exists
-#     email_exists = await db.execute(select(User).where(User.email == user_data.email))
-#     if email_exists.scalar_one_or_none():
-#         raise HTTPException(
-#             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
-#         )
-
-#     # Get company role by name
-#     role = await get_role_by_name(
-#         role_name=user_data.role_name, current_user=current_user, db=db
-#     )
-
-#     # Create the user
-#     user = User(
-#         email=user_data.email,
-#         password=hash_password(user_data.password),  # Hash password
-#         user_type=UserType.STAFF,
-#         company_id=current_user.id,
-#         subscription_type=current_user.subscription_type,
-#         role_id=role.id,
-#         updated_at=datetime.now(),
-#     )
-
-#     # Add user to database
-#     db.add(user)
-#     await db.commit()
-#     await db.refresh(user)
-
-#     # Create subscription for the staff user
-#     await create_staff_subscription(db=db, staff_user=user, current_user=current_user)
-
-#     return user
+        db.add(new_staff)
+        await db.flush()  # Get the ID without committing
+        
+        # Get company role
+        """
+        role = await get_role_by_name(
+		role_name=user_data.role_name,
+		db=db,
+		current_user=current_user
+	)
+        if not role:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Role '{user_data.role_name}' not found in your company"
+            )
+        """
+        # Create user profile
+        user_profile = UserProfile(
+            full_name=user_data.full_name,
+            phone_number=user_data.phone_number,
+            department_id=user_data.department,
+            user_id=new_staff.id,
+            pay_type=user_data.pay_type
+        )
+        db.add(user_profile)
+        
+        # Set role
+        # new_staff.role_id = role.id
+        
+        await create_staff_subscription(
+            db=db, staff_user=new_staff, current_user=current_user
+        )
+        
+        await db.commit()
+        await db.refresh(new_staff)
+        return new_staff
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
 
 async def login_user(db: AsyncSession, login_data: UserLogin) -> User:
@@ -554,3 +521,90 @@ async def confirm_password_reset(
     await db.commit()
 
     return user
+
+
+async def get_staff_details(db: AsyncSession, current_user: User, user_id: uuid.UUID) -> UserResponse:
+    """Get staff details including profile, department and role information"""
+    company_id = get_company_id(current_user)
+    stmt = (
+        select(User)
+        .options(
+            joinedload(User.user_profile).joinedload(UserProfile.department),
+            joinedload(User.role)
+        )
+        .where(User.id == user_id)
+        .where(User.company_id == company_id)
+    )
+    result = await db.execute(stmt)
+    user = result.unique().scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "company_id": str(user.company_id) if user.company_id else None,
+        "role_name": user.role.name if user.role else None,
+        "full_name": user.user_profile.full_name if user.user_profile else None,
+        "phone_number": user.user_profile.phone_number if user.user_profile else None,
+        "department": user.user_profile.department.name if user.user_profile and user.user_profile.department else None,
+        "payment_type": user.user_profile.pay_type if user.user_profile else None,
+        "created_at": user.created_at
+    }
+
+async def get_company_staff(db: AsyncSession, current_user: User) -> list[UserResponse]:
+    """Get company staff including profile, department and role information"""
+    company_id = get_company_id(current_user)
+    stmt = (
+        select(User)
+        .options(
+            joinedload(User.user_profile).joinedload(UserProfile.department),
+            joinedload(User.role)
+        )
+        .where(User.company_id == company_id)
+    )
+    result = await db.execute(stmt)
+    users = result.unique().scalars().all()
+    return [
+        {
+            "id": str(user.id),
+            "email": user.email,
+            "company_id": str(user.company_id) if user.company_id else None,
+            "role_name": user.role.name if user.role else None,
+            "full_name": user.user_profile.full_name if user.user_profile else None,
+            "phone_number": user.user_profile.phone_number if user.user_profile else None,
+            "department": user.user_profile.department.name if user.user_profile and user.user_profile.department else None,
+            "payment_type": user.user_profile.pay_type if user.user_profile else None,
+            "created_at": user.created_at,
+        } for user in users]
+
+
+async def logout_user(db: AsyncSession, refresh_token: str) -> bool:
+    """
+    Logout user by revoking their refresh token
+    Args:
+        db: Database session
+        refresh_token: The refresh token to revoke
+    Returns:
+        True if token was revoked successfully
+    """
+    stmt = (
+        select(RefreshToken)
+        .where(
+            RefreshToken.token == refresh_token,
+            RefreshToken.is_revoked == False
+        )
+    )
+    result = await db.execute(stmt)
+    token = result.scalar_one_or_none()
+
+    if not token:
+        return False
+
+    # Revoke the token
+    token.is_revoked = True
+    await db.commit()
+
+    return True

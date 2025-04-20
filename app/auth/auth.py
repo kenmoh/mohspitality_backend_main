@@ -1,10 +1,10 @@
+import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from typing import Optional
-import uuid
+from sqlalchemy import select
 
 from app.models.models import User, RefreshToken
 from app.schemas.user_schema import TokenResponse
@@ -28,7 +28,8 @@ async def create_refresh_token(user_id: str, user_type: str, db: AsyncSession) -
     token = str(uuid.uuid4())
     expires_at = datetime.now() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
-    refresh_token = RefreshToken(token=token, user_id=user_id, user_type=user_type, expires_at=expires_at)
+    refresh_token = RefreshToken(
+        token=token, user_id=user_id, user_type=user_type, expires_at=expires_at)
 
     db.add(refresh_token)
     await db.commit()
@@ -37,7 +38,8 @@ async def create_refresh_token(user_id: str, user_type: str, db: AsyncSession) -
 
 
 async def create_tokens(user_id: str, user_type: str, db: AsyncSession) -> TokenResponse:
-    access_token = create_access_token({"sub": str(user_id), 'user_type': user_type})
+    access_token = create_access_token(
+        {"sub": str(user_id), 'user_type': user_type})
     refresh_token = await create_refresh_token(user_id, user_type, db)
 
     return TokenResponse(
@@ -109,3 +111,31 @@ async def revoke_refresh_token(token: str, db: AsyncSession) -> bool:
     await db.commit()
 
     return row is not None
+
+
+async def refresh_access_token(refresh_token: str, db: AsyncSession):
+    """Create new access token using refresh token"""
+    # Find the refresh token
+    stmt = select(RefreshToken).where(
+        RefreshToken.token == refresh_token,
+        RefreshToken.is_revoked == False,
+        RefreshToken.expires_at > datetime.now()
+    )
+    result = await db.execute(stmt)
+    token = result.scalar_one_or_none()
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token"
+        )
+
+    # Create new access token
+    access_token = create_access_token(
+        data={"user_id": str(token.user_id), "user_type": token.user_type}
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
