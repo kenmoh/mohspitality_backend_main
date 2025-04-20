@@ -576,46 +576,94 @@ async def update_company_payment_gateway(
     msg = {"message": "Payment gateway information updated"}
 
     return MessageResponse(**msg)
-
+    
 
 async def create_staff_role(
-    data: StaffRoleCreate, current_user: User, db: AsyncSession
-) -> RoleCreateResponse:
-    """
-    Create a company-specific role without assigning it to anyone
-    """
-    if current_user.user_type != UserType.COMPANY:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only company admins can create roles",
-        )
+    current_user: User,
+    data: StaffRoleCreate,
+    db: AsyncSession,
+):
+    """Adds existing NavItems to a Department."""
+    check_permission(current_user, required_permission="create_departments")
 
     try:
-        # Create the role
-        new_role = Role(
-            name=data.name.lower().strip(),
+        # First check if department with this name already exists for the company
+        existing_stmt = select(Role).where(
+            Role.name == data.name.lower(),
+            Role.company_id == current_user.id
+        )
+        existing_result = await db.execute(existing_stmt)
+        if existing_result.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"A role with this name '{data.name}' already exists for this company"
+            )
+
+        # Create Department
+        role = Role(
+            name=data.name.lower(),
             company_id=current_user.id,
-            user_permissions=getattr(data, "permissions", []),
-            created_at=datetime.now(),
         )
 
-        db.add(new_role)
-        await db.commit()
-        await db.refresh(new_role)
+        # Add department to database
+        db.add(role)
+        await db.flush()
+        await db.refresh(role)
 
-        return {
-            "id": new_role.id,
-            "name": new_role.name,
-            "company_id": new_role.company_id,
-            "user_permissions": new_role.user_permissions,
+        # Prepare a list for explicitly loaded nav_items
+        permissions_data = []
+
+        # Fetch and add the NavItems if they exist
+        if data.permissions and len(data.permissions) > 0:
+            # Use a proper async query to get all permission at once
+            stmt = select(Permission).where(Permission.id.in_(data.permissions))
+            result = await db.execute(stmt)
+            permissions = result.scalars().all()
+
+            # Check if all requested permissions were found
+            found_ids = {permission.id for permission in permissions}
+            missing_ids = set(data.permissions) - found_ids
+
+            if missing_ids:
+                await db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Permission(s) with id(s) {', '.join(str(id) for id in missing_ids)} not found",
+                )
+
+            # Add the permissions to the role
+            role.permissions.extend(permissions)
+            await db.flush()  # Ensure the relationship is saved
+
+            # Collect data for each permission to include in response
+            permissions_data = [{
+                "id": permission.id,
+                "name": permission.name,
+                "description": permission.description,
+            } for permission in permissions]
+
+        await db.commit()
+
+        # Create a fully loaded response object
+        response_role = {
+            "id": role.id,
+            "name": role.name,
+            "company_id": str(role.company_id),
+            "permissions": permissions
         }
 
-    except IntegrityError:
+        return response_role
+
+    except HTTPException:
+        # Re-raise HTTPException as it's already properly formatted
+        raise
+    except Exception as e:
         await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Role '{data.name}' already exists for your company",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
         )
+
 
 
 async def update_role_with_permissions(
@@ -678,67 +726,6 @@ async def update_role_with_permissions(
         )
 
 
-# async def create_staff_role(
-#     data: StaffRoleCreate, current_user: User, db: AsyncSession
-# ) -> RoleCreateResponse:
-#     if current_user.user_type != UserType.COMPANY:
-#         raise Exception("Permission denied! Company admin only")
-#     try:
-#         # Create Role
-#         staff_role = Role(
-#             name=data.name.lower(),
-#             company_id=current_user.id,
-#             created_at=datetime.datetime.now(),
-#         )
-
-#         # Add role to database
-#         db.add(staff_role)
-#         await db.commit()
-#         await db.refresh(staff_role)
-
-#         return {
-#             "id": staff_role.id,
-#             "name": staff_role.name,
-#             "company_id": staff_role.company_id,
-#         }
-
-#     except Exception as e:
-#         error_detail = str(e)
-
-#         if "UniqueViolationError" in error_detail and "role_name" in error_detail:
-#             # Extract the key and value from the error message
-#             key_match = re.search(r"Key \((\w+)\)=\((\w+)\)", error_detail)
-#             if key_match:
-#                 key, value = key_match.groups()
-#                 raise Exception(
-#                     f"A role with this {key} '{value}' already exists for this company"
-#                 )
-
-
-# async def update_role_with_permissions(
-#     role_id: int, db: AsyncSession, data: AddPermissionsToRole, current_user: User
-# ) -> RolePermissionResponse:
-#     # Get the profile
-#     stmt = select(Role).where(Role.company_id ==
-#                               current_user.id, Role.id == role_id)
-#     result = await db.execute(stmt)
-#     role = result.scalar_one_or_none()
-
-#     if not role:
-#         raise Exception("No role exists for this company")
-
-#     permissions = []
-#     for permission in data.permissions:
-#         permissions.append(await get_permission_by_name(name=permission, db=db))
-#     # Update values that are provided
-#     role.user_permissions = permissions
-
-#     # Save changes
-#     await db.commit()
-#     await db.refresh(role)
-
-#     return role
-
 
 async def get_all_permissions(db: AsyncSession) -> list[PermissionResponse]:
     result = await db.execute(select(Permission))
@@ -760,85 +747,6 @@ async def get_all_company_staff_roles(
 ) -> list[RoleCreateResponse]:
     result = await db.execute(select(Role).where(Role.company_id == current_user.id))
     return result.scalars().all()
-
-
-async def create_department1(
-    current_user: User, data: DepartmentCreate, db: AsyncSession
-):
-    check_permission(current_user, required_permission="create_departments")
-
-    try:
-        # Create Role
-        department = Department(
-            name=data.name.lower(),
-            company_id=current_user.id,
-        )
-
-        # Add role to database
-        db.add(department)
-        await db.commit()
-        await db.refresh(department)
-
-        return department
-
-    except Exception as e:
-        error_detail = str(e)
-
-        if "department_name" in error_detail:
-            # Extract the key and value from the error message
-            key_match = re.search(r"Key \((\w+)\)=\((\w+)\)", error_detail)
-            if key_match:
-                key, value = key_match.groups()
-                raise Exception(
-                    f"A department with this {key} '{value}' already exists for this company"
-                )
-
-
-async def create_department2(
-    current_user: User,
-    data: DepartmentCreate,
-    db: AsyncSession,
-):
-    """Adds existing NavItems to a Department."""
-    check_permission(current_user, required_permission="create_departments")
-
-    try:
-        # Create Department
-        department = Department(
-            name=data.name.lower(),
-            company_id=current_user.id,
-        )
-
-        # Add department to database
-        db.add(department)
-        await db.flush()
-
-        # Fetch the NavItems
-        if data.nav_items:
-            for nav_item_id in data.nav_items:
-                nav_item = await db.get(NavItem, nav_item_id)
-                if not nav_item:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"NavItem with id {nav_item_id} not found",
-                    )
-                department.nav_items.append(nav_item)
-
-        await db.commit()
-        await db.refresh(department)
-
-        return department
-    except Exception as e:
-        error_detail = str(e)
-
-        if "department_name" in error_detail:
-            # Extract the key and value from the error message
-            key_match = re.search(r"Key \((\w+)\)=\((\w+)\)", error_detail)
-            if key_match:
-                key, value = key_match.groups()
-                raise Exception(
-                    f"A department with this {key} '{value}' already exists for this company"
-                )
 
 
 async def create_department(

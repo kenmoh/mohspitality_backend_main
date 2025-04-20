@@ -169,6 +169,14 @@ class CompanyProfile(Base):
     api_key: Mapped[str] = mapped_column(unique=True)
     api_secret: Mapped[str] = mapped_column(unique=True)
     payment_gateway: Mapped[PaymentGatwayEnum] = mapped_column()
+    
+role_permissions = Table(
+    "role_permissions",
+    Base.metadata,
+    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE")),
+    Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE")),
+    UniqueConstraint("role_id", "permission_id", name="unique_role_permission"),
+)
 
 
 class Role(Base):
@@ -181,12 +189,13 @@ class Role(Base):
     company_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    user_permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    #user_permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
     company = relationship(
         "User", back_populates="company_roles", foreign_keys=[company_id]
     )
     users = relationship("User", back_populates="role",
                          foreign_keys=[User.role_id])
+    permissions = relationship("Permission", secondary="role_permissions", lazy="selectin", back_populates="roles")
 
     __table_args__ = (UniqueConstraint(
         "name", "company_id", name="role_name"),)
@@ -203,6 +212,7 @@ class Permission(Base):
 
     name: Mapped[str] = mapped_column(unique=True)
     description: Mapped[str] = mapped_column()
+    roles = relationship("Role", secondary="role_permissions", back_populates="permissions")
 
 
 class Department(Base):

@@ -218,6 +218,7 @@ class MessageSchema(BaseModel):
 
 class StaffRoleCreate(BaseModel):
     name: str
+    permissions: list[int] = []
 
 
 class NavItemResponse(BaseModel):
@@ -270,10 +271,11 @@ class AddPermissionsToRole(BaseModel):
     permissions: list[str]
 
 
-class RoleCreateResponse(StaffRoleCreate):
+class RoleCreateResponse(BaseModel):
     id: int
     company_id: UUID
-    user_permissions: list[PermissionResponse | None] = []
+    name: str
+    permissions: list[PermissionResponse | None] = []
 
 
 class AssignRoleToStaff(BaseModel):

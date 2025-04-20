@@ -39,6 +39,8 @@ app = FastAPI(
     description="Complete hospitality solutions",
     summary="QRCode food ordering, staff management, restaurant management and more...",
 )
+
+
 limiter = Limiter(key_func=get_remote_address, default_limits=["10/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
