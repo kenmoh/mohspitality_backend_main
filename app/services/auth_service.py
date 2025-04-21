@@ -21,13 +21,17 @@ from app.schemas.user_schema import (
     UserUpdate,
     UserUpdatePassword,
 )
+from app.schemas.subscriptions import (
+    SubscriptionStatus,
+    SubscriptionType,
+
+)
 from app.services.profile_service import (
     check_permission,
     get_role_by_name,
     setup_company_roles,
 )
-from app.services.subscription_service import create_staff_subscription
-from app.schemas.subscriptions import SubscriptionType
+from app.services.subscription_service import create_staff_subscription, create_subscription
 from app.utils.utils import get_company_id
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -175,14 +179,12 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserRe
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
-    # Get company role by name
-    # role = await get_role_by_name(role_name="company-admin", db=db)
+
     # Create the user
     user = User(
         email=user_data.email,
-        password=hash_password(user_data.password),  # Hash password
+        password=hash_password(user_data.password), 
         user_type=UserType.COMPANY,
-        subscription_type=SubscriptionType.TRIAL,
         is_active=True,
         is_superuser=False,
         updated_at=datetime.now(),
@@ -192,8 +194,10 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserRe
     db.add(user)
     await db.commit()
     await db.refresh(user)
-
+ 
     # await setup_company_roles(db=db, company_id=user.id)
+    await create_subscription(db=db, plan_name=SubscriptionType.TRIAL, user_id=user.id)
+    
     return user
 
 
@@ -250,6 +254,7 @@ async def company_create_staff_user(
             pay_type=user_data.pay_type
         )
         db.add(user_profile)
+        await db.commit()
         
         # Set role
         # new_staff.role_id = role.id
@@ -258,9 +263,10 @@ async def company_create_staff_user(
             db=db, staff_user=new_staff, current_user=current_user
         )
         
-        await db.commit()
+              
         await db.refresh(new_staff)
         return new_staff
+        
     except Exception as e:
         await db.rollback()
         raise HTTPException(
@@ -550,7 +556,7 @@ async def get_staff_details(db: AsyncSession, current_user: User, user_id: uuid.
         "full_name": user.user_profile.full_name if user.user_profile else None,
         "phone_number": user.user_profile.phone_number if user.user_profile else None,
         "department": user.user_profile.department.name if user.user_profile and user.user_profile.department else None,
-        "payment_type": user.user_profile.pay_type if user.user_profile else None,
+        "pay_type": user.user_profile.pay_type if user.user_profile else None,
         "created_at": user.created_at
     }
 

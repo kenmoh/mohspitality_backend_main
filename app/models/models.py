@@ -112,10 +112,10 @@ class Subscription(Base):
         primary_key=True, default=uuid.uuid1, nullable=False, index=True
     )
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    company_id: Mapped[UUID] = mapped_column(nullable=True)
     plan_name: Mapped[SubscriptionType] = mapped_column(
         default=SubscriptionType.TRIAL)
     amount: Mapped[Decimal] = mapped_column(default=0.00)
-    # e.g., active, canceled
     status: Mapped[SubscriptionStatus] = mapped_column(
         default=SubscriptionStatus.ACTIVE
     )
@@ -125,11 +125,12 @@ class Subscription(Base):
     )
     end_date: Mapped[datetime] = mapped_column()
 
-    user = relationship("User", back_populates="subscriptions")
+    user = relationship("User", back_populates="subscriptions", lazy="selectin")
 
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
+    
     id: Mapped[UUID] = mapped_column(
         primary_key=True, default=uuid.uuid1, nullable=False, index=True
     )
@@ -144,7 +145,7 @@ class UserProfile(Base):
     rate_amount: Mapped[Decimal] = mapped_column(nullable=True)
     pay_type: Mapped[PayType] = mapped_column(
         default=PayType.MONTHLY, nullable=True)
-    user = relationship("User", back_populates="user_profile")
+    user = relationship("User", back_populates="user_profile", lazy="selectin")
     department = relationship("Department", back_populates="user_profiles")
 
 
@@ -191,10 +192,10 @@ class Role(Base):
     )
     #user_permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
     company = relationship(
-        "User", back_populates="company_roles", foreign_keys=[company_id]
+        "User", back_populates="company_roles", foreign_keys=[company_id], lazy="selectin"
     )
     users = relationship("User", back_populates="role",
-                         foreign_keys=[User.role_id])
+                         foreign_keys=[User.role_id], lazy="selectin")
     permissions = relationship("Permission", secondary="role_permissions", lazy="selectin", back_populates="roles")
 
     __table_args__ = (UniqueConstraint(

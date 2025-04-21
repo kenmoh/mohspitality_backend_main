@@ -18,7 +18,6 @@ class SubscriptionStatus(str, Enum):
 
 class CreateSubscription(BaseModel):
     plan_name: SubscriptionType
-    end_date: date
 
 
 class Updateubscription(BaseModel):

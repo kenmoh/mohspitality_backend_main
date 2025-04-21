@@ -1,7 +1,8 @@
-from datetime import datetime
-from select import select
+from datetime import datetime, timedelta
 import requests
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.models.models import Subscription, User
 from app.schemas.subscriptions import (
     CreateSubscription,
@@ -16,35 +17,38 @@ from app.utils.utils import get_subscription_payment_link
 
 TRIAL_DURATION = 14
 TRIAL_AMOUNT = 0.00
+
 PLAN_DURATION = 30
+
 BASICT_AMOUNT = 399.99
 PREMIUM_AMOUNT = 899.99
 ENTERPRISE_AMOUNT = 1199.99
 
 
 async def create_subscription(
-    db: AsyncSession, data: CreateSubscription, current_user: User
+    db: AsyncSession, plan_name: SubscriptionType, user_id: uuid.UUID
 ) -> SubscriptionResponse:
     try:
         # Determine the duration based on the plan type
-        if data.plan_name == SubscriptionType.TRIAL:
+        if plan_name == SubscriptionType.TRIAL:
             duration = TRIAL_DURATION  # Trial lasts for 14 days
             amount = TRIAL_AMOUNT
-        elif data.plan_name == SubscriptionType.BASIC:
+        elif plan_name == SubscriptionType.BASIC:
             duration = PLAN_DURATION  # Other plans last for 30 days
             amount = BASICT_AMOUNT
-        elif data.plan_name == SubscriptionType.PREMIUM:
+        elif plan_name == SubscriptionType.PREMIUM:
             duration = PLAN_DURATION
             amount = PREMIUM_AMOUNT
-        elif data.plan_name == SubscriptionType.ENTERPRISE:
+        elif plan_name == SubscriptionType.ENTERPRISE:
             duration = PLAN_DURATION
             amount = ENTERPRISE_AMOUNT
         # Create Subscription
         subscription = Subscription(
-            user_id=current_user.id,
-            plan_name=data.plan_name,
-            end_date=datetime.today() + datetime.timedelta(days=duration),
+            user_id=user_id,
+            plan_name=plan_name,
+            end_date=datetime.today() + timedelta(days=duration),
             amount=amount,
+            
         )
 
         # Add subscription to database
@@ -52,9 +56,11 @@ async def create_subscription(
         await db.commit()
         await db.refresh(subscription)
 
+        """
         subscription.payment_link = get_subscription_payment_link(
             subscription=subscription, current_user=current_user
         )
+        """
 
         return subscription
     except Exception as e:
@@ -68,7 +74,7 @@ async def create_staff_subscription(
     company_subscription = await db.execute(
         select(Subscription).where(
             Subscription.user_id == current_user.id,
-            Subscription.plan_name == current_user.subscriptions.plan_name,
+            Subscription.status == SubscriptionStatus.ACTIVE,
         )
     )
     company_subscription = company_subscription.scalar_one_or_none()
@@ -79,6 +85,7 @@ async def create_staff_subscription(
     # Create a new subscription for the staff user
     staff_subscription = Subscription(
         user_id=staff_user.id,
+        company_id=current_user.id,
         plan_name=company_subscription.plan_name,  # Inherit the plan name
         start_date=company_subscription.start_date,
         end_date=company_subscription.end_date,
@@ -159,22 +166,6 @@ async def check_and_update_expired_subscriptions(db: AsyncSession):
 
         await update_staff_subscriptions(db, expired_subscriptions.user.company_id)
 
-
-async def check_and_update_expired_subscriptions(db: AsyncSession):
-    # Get all subscriptions that have expired
-    expired_subscriptions = await db.execute(
-        select(Subscription).where(Subscription.end_date < datetime.utcnow())
-    )
-    expired_subscriptions = expired_subscriptions.scalars().all()
-
-    for subscription in expired_subscriptions:
-        # Update the subscription status to expired
-        subscription.status = "expired"
-        await db.commit()
-        await db.refresh(subscription)
-
-        # Optionally, update all staff subscriptions linked to this company subscription
-        await update_staff_subscriptions(db, subscription)
 
 
 def create_flutterwave_subscription(plan: Subscription, current_user):
