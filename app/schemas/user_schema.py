@@ -124,7 +124,6 @@ class UserCreate(UserBase):
 
 
 class StaffUserCreate(UserCreate):
-    #role_name: str
     full_name: str
     phone_number: str
     department: int

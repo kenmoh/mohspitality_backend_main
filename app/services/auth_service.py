@@ -14,6 +14,7 @@ from app.schemas.user_schema import (
     PasswordResetConfirm,
     PasswordResetRequest,
     StaffUserCreate,
+    UserBase,
     UserCreate,
     UserLogin,
     UserResponse,
@@ -47,7 +48,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 async def create_super_admin_user(
     db: AsyncSession, user_data: UserCreate
-) -> UserResponse:
+) -> UserBase:
     """
     Create a new admin user in the database.
 
@@ -86,7 +87,7 @@ async def create_super_admin_user(
 
 async def create_admin_user(
     db: AsyncSession, user_data: UserCreate, current_user: User
-) -> UserResponse:
+) -> UserBase:
     """
     Create a new admin user in the database.
 
@@ -124,7 +125,7 @@ async def create_admin_user(
     return user
 
 
-async def create_guest_user(db: AsyncSession, user_data: UserCreate) -> UserResponse:
+async def create_guest_user(db: AsyncSession, user_data: UserCreate) -> UserBase:
     """
     Create a new user in the database.
 
@@ -161,7 +162,7 @@ async def create_guest_user(db: AsyncSession, user_data: UserCreate) -> UserResp
     return user
 
 
-async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserResponse:
+async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserBase:
     """
     Create a new user in the database.
 
@@ -183,7 +184,7 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserRe
     # Create the user
     user = User(
         email=user_data.email,
-        password=hash_password(user_data.password), 
+        password=hash_password(user_data.password),
         user_type=UserType.COMPANY,
         is_active=True,
         is_superuser=False,
@@ -194,21 +195,21 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserRe
     db.add(user)
     await db.commit()
     await db.refresh(user)
- 
+
     # await setup_company_roles(db=db, company_id=user.id)
     await create_subscription(db=db, plan_name=SubscriptionType.TRIAL, user_id=user.id)
-    
+
     return user
 
 
 async def company_create_staff_user(
     db: AsyncSession, user_data: StaffUserCreate, current_user: User
-) -> UserResponse:
+) -> UserBase:
     """Create a staff user with profile in a single transaction"""
     if current_user.user_type != UserType.COMPANY:
         raise HTTPException(status_code=403, detail="Company admins only")
     check_permission(user=current_user, required_permission="create_users")
-    
+
     # Check if email exists
     stmt = select(User).where(User.email == user_data.email)
     email_exists = await db.execute(stmt)
@@ -217,7 +218,7 @@ async def company_create_staff_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered"
         )
-    
+
     try:
         # Create the staff user
         new_staff = User(
@@ -230,21 +231,8 @@ async def company_create_staff_user(
             updated_at=datetime.now(),
         )
         db.add(new_staff)
-        await db.flush()  # Get the ID without committing
-        
-        # Get company role
-        """
-        role = await get_role_by_name(
-		role_name=user_data.role_name,
-		db=db,
-		current_user=current_user
-	)
-        if not role:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Role '{user_data.role_name}' not found in your company"
-            )
-        """
+        await db.flush()
+
         # Create user profile
         user_profile = UserProfile(
             full_name=user_data.full_name,
@@ -255,18 +243,14 @@ async def company_create_staff_user(
         )
         db.add(user_profile)
         await db.commit()
-        
-        # Set role
-        # new_staff.role_id = role.id
-        
+
         await create_staff_subscription(
             db=db, staff_user=new_staff, current_user=current_user
         )
-        
-              
+
         await db.refresh(new_staff)
         return new_staff
-        
+
     except Exception as e:
         await db.rollback()
         raise HTTPException(
@@ -559,6 +543,7 @@ async def get_staff_details(db: AsyncSession, current_user: User, user_id: uuid.
         "pay_type": user.user_profile.pay_type if user.user_profile else None,
         "created_at": user.created_at
     }
+
 
 async def get_company_staff(db: AsyncSession, current_user: User) -> list[UserResponse]:
     """Get company staff including profile, department and role information"""

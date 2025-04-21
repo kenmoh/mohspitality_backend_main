@@ -11,6 +11,7 @@ from app.schemas.user_schema import (
     PasswordResetRequest,
     StaffUserCreate,
     TokenResponse,
+    UserBase,
     UserCreate,
     UserResponse,
     UserUpdate,
@@ -60,7 +61,7 @@ async def logout(
 @router.post("/register-guest", status_code=status.HTTP_201_CREATED)
 async def register_guest(
     user_data: UserCreate, db: AsyncSession = Depends(get_db)
-) -> UserResponse:
+) -> UserBase:
     try:
         return await auth_service.create_guest_user(user_data=user_data, db=db)
 
@@ -72,7 +73,7 @@ async def register_guest(
 @router.post("/register-company", status_code=status.HTTP_201_CREATED)
 async def register_company(
     user_data: UserCreate, db: AsyncSession = Depends(get_db)
-) -> UserResponse:
+) -> UserBase:
     try:
         return await auth_service.create_company_user(user_data=user_data, db=db)
 
@@ -86,7 +87,7 @@ async def register_staff(
     user_data: StaffUserCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> UserResponse:
+) -> UserBase:
     try:
         return await auth_service.company_create_staff_user(
             user_data=user_data, db=db, current_user=current_user
