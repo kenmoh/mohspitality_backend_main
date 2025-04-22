@@ -71,7 +71,7 @@ async def create_staff_subscription(
     db: AsyncSession, staff_user: User, current_user: User
 ) -> SubscriptionResponse:
     # Check if the company has an active subscription
-    company_subscription = await db.execute(
+    stmt = await db.execute(
         select(Subscription).where(
             Subscription.user_id == current_user.id,
             Subscription.status == SubscriptionStatus.ACTIVE,

@@ -204,7 +204,7 @@ class UserResponse(UserBase):
     full_name: str | None = None
     phone_number: str | None = None
     department: str | None = None
-    pay_type: str | None = None
+    payment_type: str | None = None
 
 
 class UserListResponse(BaseModel):
