@@ -100,13 +100,10 @@ async def update_item_item_by_id(
 async def get_all_items(
     db: AsyncSession,
     company_id: UUID,
-    limit: int = 10,
-    skip: int = 0,
 ) -> list[CreateItemReturnSchema]:
     """
     Retrieve all company items with pagination.
     """
-    # company_id = current_user.id if current_user.user_type == UserType.COMPANY else current_user.company_id
     cache_key = f"items:{company_id}"
     cached_items = redis_client.get(cache_key)
 
@@ -117,8 +114,7 @@ async def get_all_items(
         select(Item)
         .options(joinedload(Item.stocks))
         .where(Item.company_id == company_id)
-        .offset(skip)
-        .limit(limit)
+
     )
     items = result.unique().scalars().all()
     items_data = [

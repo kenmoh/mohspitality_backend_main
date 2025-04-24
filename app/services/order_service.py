@@ -153,7 +153,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
         redis_client.delete(guest_orders_cache_key)
 
         # Notify company about the new order
-        #await manager.notify_new_order(company_id=response.company_id, room_or_table_number=response.room_or_table_number)
+        # await manager.notify_new_order(company_id=response.company_id, room_or_table_number=response.room_or_table_number)
 
         return response
 
@@ -224,7 +224,7 @@ async def update_order(
 
         # Always append the new order item, even if it's a duplicate of an existing one
         order.order_items.append(order_item)
-        added_order_items.append(order_item)
+        # added_order_items.append(order_item)
 
     # Update order total amount
     order.total_amount += new_total
@@ -659,11 +659,11 @@ async def delete_split_order(
 
 
 async def get_user_or_company_orders(current_user: User, db: AsyncSession):
-    user_id = get_company_id(current_user) if (
+    company_id = get_company_id(current_user) if (
         current_user.user_type == UserType.COMPANY or current_user.user_type == UserType.STAFF)else current_user.id
 
-    company_orders_cache_key = f"orders:company:{user_id}"
-    guest_orders_cache_key = f"orders:guest:{user_id}"
+    company_orders_cache_key = f"orders:company:{company_id}"
+    guest_orders_cache_key = f"orders:guest:{company_id}"
 
     cached_orders = []
 
@@ -678,7 +678,7 @@ async def get_user_or_company_orders(current_user: User, db: AsyncSession):
     result = await db.execute(
         select(Order)
         .options(selectinload(Order.order_items).joinedload(OrderItem.item))
-        .where(or_(Order.company_id == user_id, Order.guest_id == current_user.id))
+        .where(or_(Order.company_id == company_id, Order.guest_id == current_user.id))
     )
 
     orders = result.unique().scalars().all()

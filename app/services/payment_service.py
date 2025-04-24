@@ -67,23 +67,44 @@ async def payment_callback(request: Request, db: Session = Depends(get_db)):
     result = await db.execute(event_query)
     event = result.scalar_one_or_none()
 
-    if (
-        tx_status == "successful"
-        and verify_transaction_tx_ref(tx_ref).get("data").get("status") == "successful"
-    ):
-        order.payment_status = PaymentStatus.PAID
-        db.commit()
+    if order:
+
+        if (
+            tx_status == "successful"
+            and verify_transaction_tx_ref(tx_ref).get("data").get("status") == "successful"
+        ):
+            order.payment_status = PaymentStatus.PAID
+            db.commit()
+            return {"payment_status": order.payment_status}
+
+        if tx_status == "cancelled":
+            order.payment_status = PaymentStatus.CANCELLED
+            db.commit()
+            return {"payment_status": order.payment_status}
+
+        else:
+            order.payment_status = PaymentStatus.FAILED
+            db.commit()
         return {"payment_status": order.payment_status}
 
-    if tx_status == "cancelled":
-        order.payment_status = PaymentStatus.CANCELLED
-        db.commit()
-        return {"payment_status": order.payment_status}
+    elif event:
+        if (
+            tx_status == "successful"
+            and verify_transaction_tx_ref(tx_ref).get("data").get("status") == "successful"
+        ):
+            event.payment_status = PaymentStatus.PAID
+            db.commit()
+            return {"payment_status": event.payment_status}
 
-    else:
-        order.payment_status = PaymentStatus.FAILED
-        db.commit()
-        return {"payment_status": order.payment_status}
+        if tx_status == "cancelled":
+            event.payment_status = PaymentStatus.CANCELLED
+            db.commit()
+            return {"payment_status": event.payment_status}
+
+        else:
+            event.payment_status = PaymentStatus.FAILED
+            db.commit()
+        return {"payment_status": event.payment_status}
 
 
 # SUCCESS WEBHOOK
