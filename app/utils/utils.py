@@ -104,11 +104,12 @@ async def get_order_payment_link(
 
 
 def get_company_id(current_user: User):
-    company_id = ''
-    if current_user.user_type == UserType.COMPANY:
-        company_id = current_user.id
-    elif current_user.user_type == UserType.STAFF:
-        company_id = current_user.company_id
+
+    company_id = (
+        current_user.id
+        if current_user.user_type == UserType.COMPANY
+        else current_user.company_id
+    )
 
     return company_id
 

@@ -245,6 +245,14 @@ class DepartmentResponse(BaseModel):
         from_attributes = True
 
 
+class OutletCreate(BaseModel):
+    name: str
+
+
+class OutleResponse(OutletCreate):
+    id: str
+
+
 class DepartmentCreate(BaseModel):
     name: str
     nav_items: list[int] = []

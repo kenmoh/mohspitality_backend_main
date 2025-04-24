@@ -1,12 +1,7 @@
 from datetime import date, time, datetime
 from decimal import Decimal
-
 import json
-from os import name
-from urllib import response
 from uuid import UUID
-from venv import create
-from asyncpg import UniqueViolationError
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 from sqlalchemy import or_, and_, select
@@ -379,8 +374,8 @@ async def create_event_booking(
                     MeetingRoom.is_available == True,
                 )
             )
-            room = await db.execute(room_query)
-            room = room.scalar_one_or_none()
+            room_query = await db.execute(room_query)
+            room = room_query.scalar_one_or_none()
 
             if not room:
                 raise HTTPException(
@@ -419,7 +414,7 @@ async def create_event_booking(
             #         status_code=status.HTTP_400_BAD_REQUEST,
             #         detail="Some selected menu items are not available"
             #     )
-            total_amount = sum(item.price for item in menu_items)
+            total_amount = sum(item.price for item in menu_items) + room.price
 
         # Create booking
         new_booking = EventBooking(

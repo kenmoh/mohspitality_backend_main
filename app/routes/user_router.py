@@ -87,7 +87,7 @@ async def create_staff_profile(
 async def get_user_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> UserProfileResponse:
+) -> UserProfileResponse | CreateCompanyProfileResponse:
     try:
         return await profile_service.get_user_profile(
             db=db,  current_user=current_user

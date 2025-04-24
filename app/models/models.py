@@ -71,6 +71,10 @@ class User(Base):
     )
     user_profile = relationship(
         "UserProfile", back_populates="user", uselist=False)
+
+    profile_image = relationship(
+        "ProfileImage", back_populates="user", uselist=False)
+
     company_profile = relationship(
         "CompanyProfile", back_populates="user", uselist=False
     )
@@ -125,12 +129,30 @@ class Subscription(Base):
     )
     end_date: Mapped[datetime] = mapped_column()
 
-    user = relationship("User", back_populates="subscriptions", lazy="selectin")
+    user = relationship(
+        "User", back_populates="subscriptions", lazy="selectin")
+
+
+class ProfileImage(Base):
+    __tablename__ = "profile_image"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True, autoincrement=True, nullable=False, index=True
+    )
+    image_url: Mapped[str] = mapped_column()
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    user = relationship(
+        "User", back_populates="profile_image", lazy="selectin")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
-    
+
     id: Mapped[UUID] = mapped_column(
         primary_key=True, default=uuid.uuid1, nullable=False, index=True
     )
@@ -161,7 +183,6 @@ class CompanyProfile(Base):
     company_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    logo_url: Mapped[str] = mapped_column(nullable=True)
     currency_symbol: Mapped[CurencySymbol] = mapped_column(
         nullable=True, default=CurencySymbol.NGN
     )
@@ -170,13 +191,16 @@ class CompanyProfile(Base):
     api_key: Mapped[str] = mapped_column(unique=True)
     api_secret: Mapped[str] = mapped_column(unique=True)
     payment_gateway: Mapped[PaymentGatwayEnum] = mapped_column()
-    
+
+
 role_permissions = Table(
     "role_permissions",
     Base.metadata,
     Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE")),
-    Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE")),
-    UniqueConstraint("role_id", "permission_id", name="unique_role_permission"),
+    Column("permission_id", Integer, ForeignKey(
+        "permissions.id", ondelete="CASCADE")),
+    UniqueConstraint("role_id", "permission_id",
+                     name="unique_role_permission"),
 )
 
 
@@ -190,13 +214,14 @@ class Role(Base):
     company_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    #user_permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # user_permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
     company = relationship(
         "User", back_populates="company_roles", foreign_keys=[company_id], lazy="selectin"
     )
     users = relationship("User", back_populates="role",
                          foreign_keys=[User.role_id], lazy="selectin")
-    permissions = relationship("Permission", secondary="role_permissions", lazy="selectin", back_populates="roles")
+    permissions = relationship(
+        "Permission", secondary="role_permissions", lazy="selectin", back_populates="roles")
 
     __table_args__ = (UniqueConstraint(
         "name", "company_id", name="role_name"),)
@@ -213,7 +238,8 @@ class Permission(Base):
 
     name: Mapped[str] = mapped_column(unique=True)
     description: Mapped[str] = mapped_column()
-    roles = relationship("Role", secondary="role_permissions", back_populates="permissions")
+    roles = relationship("Role", secondary="role_permissions",
+                         back_populates="permissions")
 
 
 class Department(Base):

@@ -3,7 +3,7 @@ from fastapi import BackgroundTasks, HTTPException, status
 from fastapi_mail import FastMail
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
@@ -196,7 +196,7 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserBa
     await db.commit()
     await db.refresh(user)
 
-    # await setup_company_roles(db=db, company_id=user.id)
+    await setup_company_roles(db=db, company_id=user.id, name='company-admin')
     await create_subscription(db=db, plan_name=SubscriptionType.TRIAL, user_id=user.id)
 
     return user
@@ -352,7 +352,7 @@ async def update_password(
         )
 
     # Verify current password
-    if not verify_password(password_data.current_password, user.hashed_password):
+    if not verify_password(password_data.current_password, user.password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
@@ -363,11 +363,11 @@ async def update_password(
 
     # Revoke all refresh tokens for this user
     await db.execute(
-        (RefreshToken)
-        .where(
+        update((RefreshToken)
+               .where(
             RefreshToken.user_id == current_user.id, RefreshToken.is_revoked == False
         )
-        .values(is_revoked=True)
+            .values(is_revoked=True))
     )
 
     # Save changes
@@ -533,9 +533,9 @@ async def get_staff_details(db: AsyncSession, current_user: User, user_id: uuid.
             detail="User not found"
         )
     return {
-        "id": str(user.id),
+        "id": user.id,
         "email": user.email,
-        "company_id": str(user.company_id) if user.company_id else None,
+        "company_id": user.company_id if user.company_id else None,
         "role_name": user.role.name if user.role else None,
         "full_name": user.user_profile.full_name if user.user_profile else None,
         "phone_number": user.user_profile.phone_number if user.user_profile else None,
