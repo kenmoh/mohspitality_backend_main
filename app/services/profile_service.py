@@ -323,7 +323,7 @@ async def setup_company_roles(db: AsyncSession, company_id: UUID, name: str):
     company_role = Role(
         company_id=company_id,
         name=str,
-        user_permissions=action_resource_list,
+        permissions=action_resource_list,
     )
 
     db.add(company_role)
