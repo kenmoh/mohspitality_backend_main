@@ -18,6 +18,7 @@ from app.schemas.user_schema import (
     UserUpdatePassword,
 )
 from app.services import auth_service
+from app.services.profile_service import get_user_allowed_routes
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
@@ -29,7 +30,15 @@ async def login_user(
 ) -> TokenResponse:
     try:
         user = await auth_service.login_user(login_data=user_credentials, db=db)
-        return await create_tokens(user_id=user.id, user_type=user.user_type, db=db)
+        allowed_routes = await get_user_allowed_routes(user, db)
+        token = await create_tokens(user_id=user.id, user_type=user.user_type, db=db)
+        
+        return TokenResponse(
+	    refresh_token=token.refresh_token,
+	    user_type=token.user_type,
+	    allowed_routes=allowed_routes,
+            access_token=tokens.access_token,
+        )
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

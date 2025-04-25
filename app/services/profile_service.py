@@ -362,7 +362,32 @@ async def pre_create_permissions(db: AsyncSession):
         print(f"Added {len(permissions)} new permissions to the database.")
     else:
         print("No new permissions to add.")
+        
+        
+async def get_user_allowed_routes(user: User, db: AsyncSession) -> list[str]:
+    # Ensure user has a profile and department loaded
+    stmt = (
+        select(User)
+        .options(
+            selectinload(User.user_profile)
+            .selectinload(UserProfile.department)
+            .selectinload(Department.nav_items)
+        )
+        .where(User.id == user.id)
+    )
 
+    result = await db.execute(stmt)
+    user_with_navs = result.scalar_one_or_none()
+
+    if not user_with_navs or not user_with_navs.user_profile:
+        return []
+
+    department = user_with_navs.user_profile.department
+    if not department:
+        return []
+
+    # Extract all nav item paths
+    return [nav_item.path for nav_item in department.nav_items]
 
 def has_permission(user: User, required_permission: str) -> bool:
     """

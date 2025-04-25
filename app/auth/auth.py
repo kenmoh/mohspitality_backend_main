@@ -173,3 +173,39 @@ async def refresh_access_token(refresh_token: str, db: AsyncSession) -> dict:
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        
+        
+        
+"""
+
+async def create_tokens(
+    user_id: str,
+    user_type: str,
+    db: AsyncSession,
+    allowed_routes: list[str] | None = None
+) -> TokenResponse:
+    if allowed_routes is None:
+        allowed_routes = []
+
+    access_token = create_access_token({
+        "sub": str(user_id),
+        "user_type": user_type,
+        "allowed_routes": allowed_routes
+    })
+
+    refresh_token = await create_refresh_token(
+        user_id=user_id,
+        user_type=user_type,
+        db=db,
+        allowed_routes=allowed_routes
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user_type=user_type,
+        token_type="bearer",
+        allowed_routes=allowed_routes
+    )
+
+"""

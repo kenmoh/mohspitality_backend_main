@@ -205,7 +205,6 @@ class Role(Base):
     company_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    # user_permissions: Mapped[list[str]] = mapped_column(JSON, default=list)
     company = relationship(
         "User",
         back_populates="company_roles",
