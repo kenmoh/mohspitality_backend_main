@@ -45,11 +45,14 @@ class WebSocketManager:
     async def handle_message(self, company_id: UUID, user_id: UUID, message: str):
         """Process incoming messages (e.g., save to DB, trigger actions)."""
         print(
-            f"Received message from user {user_id} in company {company_id}: {message}")
+            f"Received message from user {user_id} in company {company_id}: {message}"
+        )
         # Example: Save message to database (omitted for brevity)
         # await save_message_to_db(company_id, user_id, message)
 
-    async def send_notification_to_company(self, company_id: UUID, message: str, db: AsyncSession):
+    async def send_notification_to_company(
+        self, company_id: UUID, message: str, db: AsyncSession
+    ):
         """Send a notification to all connected users in a company."""
         await self.broadcast(company_id, message)
         # Save notification to the database
@@ -75,12 +78,16 @@ class WebSocketManager:
                 except Exception as e:
                     print(f"Error sending message to websocket: {e}")
 
-    async def notify_new_order(self, company_id: UUID, room_or_table_number: str, db: AsyncSession):
+    async def notify_new_order(
+        self, company_id: UUID, room_or_table_number: str, db: AsyncSession
+    ):
         """Notify the company about a new order."""
         message = f"New order from: {room_or_table_number}"
         await self.send_notification_to_company(company_id, message, db)
 
-    async def notify_order_status_update(self, user_id: UUID, order_id: UUID, status: str, db: AsyncSession):
+    async def notify_order_status_update(
+        self, user_id: UUID, order_id: UUID, status: str, db: AsyncSession
+    ):
         """Notify the guest about an order status update."""
         message = f"Your order with ID: {order_id} has been updated to status: {status}"
         if user_id in self.active_connections:
@@ -89,7 +96,8 @@ class WebSocketManager:
                     await websocket.send_text(message)
                     # Save notification to the database
                     notification = Notification(
-                        user_id=user_id, company_id='', message=message)
+                        user_id=user_id, company_id="", message=message
+                    )
                     db.add(notification)
                     await db.commit()
                 except Exception as e:

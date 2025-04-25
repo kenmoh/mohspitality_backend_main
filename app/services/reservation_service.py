@@ -35,16 +35,25 @@ async def create_reservation(
     user = result.scalar_one_or_none()
     try:
         # Determine if this is a company-created or guest-created reservation
-        is_company_created = current_user.user_type == UserType.COMPANY or current_user.user_type == UserType.STAFF
+        is_company_created = (
+            current_user.user_type == UserType.COMPANY
+            or current_user.user_type == UserType.STAFF
+        )
 
         new_reservation = Reservation(
             guest_id=None if is_company_created else current_user.id,
             company_id=current_user.id
             if is_company_created
             else reservation_data.company_id,
-            guest_name=reservation_data.guest_name if is_company_created else user.user_profile.full_name,
-            guest_email=reservation_data.guest_email if is_company_created else user.email,
-            guest_phone=reservation_data.guest_phone if is_company_created else user.user_profile.phone_number,
+            guest_name=reservation_data.guest_name
+            if is_company_created
+            else user.user_profile.full_name,
+            guest_email=reservation_data.guest_email
+            if is_company_created
+            else user.email,
+            guest_phone=reservation_data.guest_phone
+            if is_company_created
+            else user.user_profile.phone_number,
             arrival_date=reservation_data.arrival_date,
             arrival_time=reservation_data.arrival_time,
             number_of_guests=reservation_data.number_of_guests,
@@ -101,7 +110,10 @@ async def get_user_reservations(
     guest_cache_key = f"reservations:guest:{current_user.id}"
 
     # Check cache based on user type
-    if current_user.user_type in (UserType.COMPANY, UserType.STAFF) and company_cache_key:
+    if (
+        current_user.user_type in (UserType.COMPANY, UserType.STAFF)
+        and company_cache_key
+    ):
         cached_reservations = redis_client.get(company_cache_key)
     else:
         cached_reservations = redis_client.get(guest_cache_key)
@@ -187,8 +199,7 @@ async def update_reservation(
     company_id = get_company_id(current_user)
     query = select(Reservation).where(
         Reservation.id == reservation_id,
-        (Reservation.guest_id == current_user) | (
-            Reservation.company_id == company_id),
+        (Reservation.guest_id == current_user) | (Reservation.company_id == company_id),
     )
     result = await db.execute(query)
     reservation = result.scalar_one_or_none()
@@ -232,8 +243,8 @@ async def update_reservation_status(
     company_id = get_company_id(current_user)
     query = select(Reservation).where(
         Reservation.id == reservation_id,
-        (Reservation.guest_id == current_user.id) | (
-            Reservation.company_id == company_id),
+        (Reservation.guest_id == current_user.id)
+        | (Reservation.company_id == company_id),
     )
     result = await db.execute(query)
     reservation = result.scalar_one_or_none()

@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # Fernet key
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY")
-    
+
     # Logfire
     LOGFIRE_TOKEN: str = os.getenv("LOGFIRE_TOKEN")
 

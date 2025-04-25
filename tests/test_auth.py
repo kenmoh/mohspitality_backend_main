@@ -18,7 +18,9 @@ async def test_register_guest(client: httpx.AsyncClient, test_db: AsyncSession):
     assert response.json()["email"] == user_data["email"]
 
     # Verify the user exists in the database
-    result = await test_db.execute("SELECT * FROM users WHERE email = :email", {"email": user_data["email"]})
+    result = await test_db.execute(
+        "SELECT * FROM users WHERE email = :email", {"email": user_data["email"]}
+    )
     user = (await result).fetchone()
     assert user is not None
     assert user["email"] == user_data["email"]
@@ -35,14 +37,18 @@ async def test_register_company(client: httpx.AsyncClient, test_db: AsyncSession
     assert response.json()["email"] == user_data["email"]
 
     # Verify the user exists in the database
-    result = await test_db.execute("SELECT * FROM users WHERE email = :email", {"email": user_data["email"]})
+    result = await test_db.execute(
+        "SELECT * FROM users WHERE email = :email", {"email": user_data["email"]}
+    )
     user = (await result).fetchone()
     assert user is not None
     assert user["email"] == user_data["email"]
 
 
 @pytest.mark.asyncio
-async def test_login_user(client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User):
+async def test_login_user(
+    client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User
+):
     """
     Test the login endpoint with valid credentials.
     """
@@ -55,7 +61,9 @@ async def test_login_user(client: httpx.AsyncClient, test_db: AsyncSession, crea
 
 
 @pytest.mark.asyncio
-async def test_login_user_invalid_credentials(client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User):
+async def test_login_user_invalid_credentials(
+    client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User
+):
     """
     Test the login endpoint with invalid credentials.
     """
@@ -66,7 +74,9 @@ async def test_login_user_invalid_credentials(client: httpx.AsyncClient, test_db
 
 
 @pytest.mark.asyncio
-async def test_register_staff(client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User):
+async def test_register_staff(
+    client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User
+):
     """
     Test the staff user registration endpoint.
     """
@@ -91,7 +101,9 @@ async def test_register_staff(client: httpx.AsyncClient, test_db: AsyncSession, 
     await test_db.commit()
 
     response = await client.post(
-        "/api/auth/register-staff", json=staff_data, headers={"Authorization": f"Bearer {user.email}"}
+        "/api/auth/register-staff",
+        json=staff_data,
+        headers={"Authorization": f"Bearer {user.email}"},
     )
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
@@ -107,14 +119,18 @@ async def test_register_staff(client: httpx.AsyncClient, test_db: AsyncSession, 
 
 
 @pytest.mark.asyncio
-async def test_update_user(client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User):
+async def test_update_user(
+    client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User
+):
     """
     Test the update user endpoint.
     """
     user = create_test_user
     update_data = {"email": "newemail@example.com"}
     response = await client.put(
-        "/api/auth/update-user", json=update_data, headers={"Authorization": f"Bearer {user.email}"}
+        "/api/auth/update-user",
+        json=update_data,
+        headers={"Authorization": f"Bearer {user.email}"},
     )
     assert response.status_code == status.HTTP_202_ACCEPTED
     assert response.json()["email"] == update_data["email"]
@@ -128,15 +144,18 @@ async def test_update_user(client: httpx.AsyncClient, test_db: AsyncSession, cre
 
 
 @pytest.mark.asyncio
-async def test_update_password(client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User):
+async def test_update_password(
+    client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User
+):
     """
     Test the update password endpoint.
     """
     user = create_test_user
-    update_data = {"current_password": "test_password",
-                   "new_password": "new_password"}
+    update_data = {"current_password": "test_password", "new_password": "new_password"}
     response = await client.put(
-        "/api/auth/update-password", json=update_data, headers={"Authorization": f"Bearer {user.email}"}
+        "/api/auth/update-password",
+        json=update_data,
+        headers={"Authorization": f"Bearer {user.email}"},
     )
     assert response.status_code == status.HTTP_202_ACCEPTED
 
@@ -146,13 +165,16 @@ async def test_update_password(client: httpx.AsyncClient, test_db: AsyncSession,
     )
     updated_user = (await result).fetchone()
     assert updated_user is not None
-    assert not (updated_user["password"] == hash_password(
-        update_data["current_password"]))
+    assert not (
+        updated_user["password"] == hash_password(update_data["current_password"])
+    )
     # assert verify_password(update_data["new_password"], updated_user["password"])
 
 
 @pytest.mark.asyncio
-async def test_request_password_reset(client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User):
+async def test_request_password_reset(
+    client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User
+):
     """
     Test the request password reset endpoint.
     """
@@ -163,8 +185,7 @@ async def test_request_password_reset(client: httpx.AsyncClient, test_db: AsyncS
 
     # Verify that a password reset token has been created in the database
     result = await test_db.execute(
-        "SELECT * FROM password_resets WHERE user_id = :user_id", {
-            "user_id": user.id}
+        "SELECT * FROM password_resets WHERE user_id = :user_id", {"user_id": user.id}
     )
     password_reset = (await result).fetchone()
     assert password_reset is not None
@@ -216,7 +237,9 @@ async def test_register_super_admin(client: httpx.AsyncClient, test_db: AsyncSes
     assert response.json()["email"] == user_data["email"]
 
     # Verify the user exists in the database and is a super admin
-    result = await test_db.execute("SELECT * FROM users WHERE email = :email", {"email": user_data["email"]})
+    result = await test_db.execute(
+        "SELECT * FROM users WHERE email = :email", {"email": user_data["email"]}
+    )
     user = (await result).fetchone()
     assert user is not None
     assert user["email"] == user_data["email"]
@@ -224,7 +247,9 @@ async def test_register_super_admin(client: httpx.AsyncClient, test_db: AsyncSes
 
 
 @pytest.mark.asyncio
-async def test_register_admin_staff(client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User):
+async def test_register_admin_staff(
+    client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User
+):
     """Test the admin staff registration endpoint."""
     user = create_test_user  # A company user to act as the current user
     admin_data = {"email": "adminstaff@example.com", "password": "password123"}
@@ -238,14 +263,18 @@ async def test_register_admin_staff(client: httpx.AsyncClient, test_db: AsyncSes
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
     # Verify the user exists in the database and is not a super admin
-    result = await test_db.execute("SELECT * FROM users WHERE email = :email", {"email": admin_data["email"]})
+    result = await test_db.execute(
+        "SELECT * FROM users WHERE email = :email", {"email": admin_data["email"]}
+    )
     user = (await result).fetchone()
     # User should not be created because the request should fail with 403
     assert user is None
 
 
 @pytest.mark.asyncio
-async def test_confirm_password_reset(client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User):
+async def test_confirm_password_reset(
+    client: httpx.AsyncClient, test_db: AsyncSession, create_test_user: User
+):
     """
     Test the confirm password reset endpoint.
     """
@@ -256,8 +285,7 @@ async def test_confirm_password_reset(client: httpx.AsyncClient, test_db: AsyncS
 
     # Get the reset token from the database
     result = await test_db.execute(
-        "SELECT * FROM password_resets WHERE user_id = :user_id", {
-            "user_id": user.id}
+        "SELECT * FROM password_resets WHERE user_id = :user_id", {"user_id": user.id}
     )
     password_reset = (await result).fetchone()
     reset_token = password_reset["token"]
@@ -277,8 +305,7 @@ async def test_confirm_password_reset(client: httpx.AsyncClient, test_db: AsyncS
 
     # Verify that the password reset token has been used
     result = await test_db.execute(
-        "SELECT * FROM password_resets WHERE token = :token", {
-            "token": reset_token}
+        "SELECT * FROM password_resets WHERE token = :token", {"token": reset_token}
     )
     password_reset = (await result).fetchone()
     assert password_reset["is_used"] is True

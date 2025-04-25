@@ -16,7 +16,6 @@ from app.auth import get_current_user
 from app.models.models import (
     EventBooking,
     Order,
-
 )
 from app.database.database import get_db
 
@@ -53,25 +52,19 @@ async def payment_callback(request: Request, db: Session = Depends(get_db)):
     tx_ref = request.query_params["tx_ref"]
     tx_status = request.query_params["status"]
 
-    order_query = (
-        select(Order)
-        .where(unique_id(Order.id) == tx_ref)
-    )
+    order_query = select(Order).where(unique_id(Order.id) == tx_ref)
     result = await db.execute(order_query)
     order = result.scalar_one_or_none()
 
-    event_query = (
-        select(EventBooking)
-        .where(unique_id(EventBooking.id) == tx_ref)
-    )
+    event_query = select(EventBooking).where(unique_id(EventBooking.id) == tx_ref)
     result = await db.execute(event_query)
     event = result.scalar_one_or_none()
 
     if order:
-
         if (
             tx_status == "successful"
-            and verify_transaction_tx_ref(tx_ref).get("data").get("status") == "successful"
+            and verify_transaction_tx_ref(tx_ref).get("data").get("status")
+            == "successful"
         ):
             order.payment_status = PaymentStatus.PAID
             db.commit()
@@ -90,7 +83,8 @@ async def payment_callback(request: Request, db: Session = Depends(get_db)):
     elif event:
         if (
             tx_status == "successful"
-            and verify_transaction_tx_ref(tx_ref).get("data").get("status") == "successful"
+            and verify_transaction_tx_ref(tx_ref).get("data").get("status")
+            == "successful"
         ):
             event.payment_status = PaymentStatus.PAID
             db.commit()

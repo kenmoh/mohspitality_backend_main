@@ -17,7 +17,7 @@ async def websocket_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        user_id = ''
+        user_id = ""
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -56,5 +56,7 @@ async def notify_new_order_route(company_id: UUID, order_id: UUID):
 @router.post("/order_status_update/{user_id}/{order_id}/{status}")
 async def notify_order_status_update_route(user_id: UUID, order_id: UUID, status: str):
     """Route to trigger an order status update notification to the guest."""
-    await manager.notify_order_status_update(user_id=user_id, order_id=order_id, status=status)
+    await manager.notify_order_status_update(
+        user_id=user_id, order_id=order_id, status=status
+    )
     return {"message": f"Order status update sent to user {user_id}"}

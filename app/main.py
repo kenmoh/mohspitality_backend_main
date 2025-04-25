@@ -20,7 +20,7 @@ from app.routes import (
     order_router,
     payroll_routes,
     staff_attendance_routes,
-    #notification_routes
+    # notification_routes
 )
 from app.services.profile_service import pre_create_permissions, setup_company_roles
 from app.services.qrcode_service import initialize_qr_code_limits
@@ -55,7 +55,6 @@ logfire.instrument_sqlalchemy(engine=engine)
 logfire.instrument_fastapi(app, capture_headers=True)
 
 
-
 app.include_router(auth_router.router)
 app.include_router(user_router.router)
 app.include_router(qrcode_router.router)
@@ -65,13 +64,11 @@ app.include_router(event_router.router)
 app.include_router(reservation_router.router)
 app.include_router(payroll_routes.router)
 app.include_router(staff_attendance_routes.router)
-#app.include_router(notification_routes.router)
-
-
+# app.include_router(notification_routes.router)
 
 
 # Allow requests from your frontend
-origins=[
+origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost",
@@ -81,9 +78,7 @@ origins=[
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    #allow_credentials=True,
+    # allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    
 )
-

@@ -30,7 +30,6 @@ from app.schemas.event_schema import (
     SeatArrangementCreate,
     SeatArrangementResponse,
     SeatArrangementSelection,
-
 )
 
 from app.schemas.user_schema import UserType
@@ -123,8 +122,7 @@ async def get_meeting_room(
     room_data = MeetingRoomResponse(**room_dict)
 
     # Cache the serialized data
-    redis_client.set(cache_key, room_data.model_dump_json(),
-                     ex=settings.REDIS_EX)
+    redis_client.set(cache_key, room_data.model_dump_json(), ex=settings.REDIS_EX)
 
     return room_data
 
@@ -272,8 +270,7 @@ async def get_company_seat_arrangements(
         data = json.loads(cached_data)
         return [SeatArrangementResponse.model_validate(seat) for seat in data]
 
-    query = select(SeatArrangement).where(
-        SeatArrangement.company_id == current_user.id)
+    query = select(SeatArrangement).where(SeatArrangement.company_id == current_user.id)
 
     result = await db.execute(query)
     arrangements = result.unique().scalars().all()
@@ -503,9 +500,7 @@ async def get_bookings(
     status: EventStatus = None,
 ) -> list[EventBookingResponse]:
     """Get all bookings for a user (either as guest or company)."""
-    cache_key = (
-        f"bookings:user:{current_user.id}:status:{status}"
-    )
+    cache_key = f"bookings:user:{current_user.id}:status:{status}"
     cached_data = redis_client.get(cache_key)
 
     if cached_data:
@@ -513,13 +508,10 @@ async def get_bookings(
 
     company_id = get_company_id(current_user)
 
-    query = (
-        select(EventBooking)
-        .where(
-            or_(
-                EventBooking.guest_id == current_user.id,
-                EventBooking.company_id == company_id,
-            )
+    query = select(EventBooking).where(
+        or_(
+            EventBooking.guest_id == current_user.id,
+            EventBooking.company_id == company_id,
         )
     )
 
@@ -770,8 +762,7 @@ async def get_company_menu_items(
         data = json.loads(cached_data)
         return [EventMenuItemResponse.model_validate(seat) for seat in data]
 
-    query = select(EventMenuItem).where(
-        EventMenuItem.company_id == current_user.id)
+    query = select(EventMenuItem).where(EventMenuItem.company_id == current_user.id)
 
     result = await db.execute(query)
     items = result.unique().scalars().all()
@@ -901,8 +892,7 @@ async def get_arrangements_for_selection(
     arrangements = result.scalars().all()
 
     return [
-        SeatArrangementSelection(
-            id=arr.id, name=arr.name, capacity=arr.capacity)
+        SeatArrangementSelection(id=arr.id, name=arr.name, capacity=arr.capacity)
         for arr in arrangements
     ]
 
@@ -1000,11 +990,9 @@ async def is_room_available(
 
     # Check for time conflicts
     for booking in existing_bookings:
-        booking_start = datetime.combine(
-            booking.arrival_date, booking.arrival_time)
+        booking_start = datetime.combine(booking.arrival_date, booking.arrival_time)
         booking_end = datetime.combine(
-            booking.end_date if hasattr(
-                booking, "end_date") else booking.arrival_date,
+            booking.end_date if hasattr(booking, "end_date") else booking.arrival_date,
             booking.end_time,
         )
 

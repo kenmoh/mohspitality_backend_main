@@ -17,13 +17,14 @@ from app.services.auth_service import hash_password
 
 # Override settings for testing
 settings.DATABASE_URL = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db")
+    "TEST_DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+)
 
 # Create async engine for testing
-test_engine = create_async_engine(
-    settings.DATABASE_URL, echo=False, poolclass=NullPool)
+test_engine = create_async_engine(settings.DATABASE_URL, echo=False, poolclass=NullPool)
 TestAsyncSessionLocal = sessionmaker(
-    test_engine, class_=AsyncSession, expire_on_commit=False)
+    test_engine, class_=AsyncSession, expire_on_commit=False
+)
 
 
 async def get_test_db() -> AsyncGenerator[AsyncSession, None]:
@@ -79,7 +80,7 @@ async def create_test_user(test_db: AsyncSession) -> User:
         "user_type": "COMPANY",
         "is_active": True,
         "is_superuser": False,
-        "updated_at": "2024-10-24T11:00:00"
+        "updated_at": "2024-10-24T11:00:00",
     }
     user = User(
         email=user_data["email"],

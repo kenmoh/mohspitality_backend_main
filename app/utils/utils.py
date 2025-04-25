@@ -95,8 +95,7 @@ async def get_order_payment_link(
             return response_data["data"]["link"]
 
     except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=502, detail=f"Payment gateway error: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Payment gateway error: {str(e)}")
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to generate payment link: {str(e)}"
@@ -104,7 +103,6 @@ async def get_order_payment_link(
 
 
 def get_company_id(current_user: User):
-
     company_id = (
         current_user.id
         if current_user.user_type == UserType.COMPANY
@@ -115,7 +113,6 @@ def get_company_id(current_user: User):
 
 
 def verify_transaction_tx_ref(tx_ref: str):
-
     try:
         headers = {"Authorization": f"Bearer {settings.FLW_SECRET_KEY}"}
         response = requests.get(

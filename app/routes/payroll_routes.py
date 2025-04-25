@@ -8,11 +8,13 @@ from app.database.database import get_db
 from app.schemas.payroll_schema import PayrollSchema, PayrollResponseSchema
 from app.services.payroll_service import PayrollService
 
-router = APIRouter(tags=['Payrolls'], prefix="/api/payrolls")
+router = APIRouter(tags=["Payrolls"], prefix="/api/payrolls")
 
 
 @router.post("", response_model=PayrollResponseSchema, status_code=201)
-async def create_payroll(payroll: PayrollSchema, db: AsyncSession = Depends(get_db)) -> Any:
+async def create_payroll(
+    payroll: PayrollSchema, db: AsyncSession = Depends(get_db)
+) -> Any:
     """
     Create a new payroll.
     """
@@ -33,7 +35,9 @@ async def get_payroll(payroll_id: int, db: AsyncSession = Depends(get_db)) -> An
 
 
 @router.get("/user/{user_id}", response_model=list[PayrollResponseSchema])
-async def get_payrolls_by_user(user_id: UUID, db: AsyncSession = Depends(get_db)) -> Any:
+async def get_payrolls_by_user(
+    user_id: UUID, db: AsyncSession = Depends(get_db)
+) -> Any:
     """
     Get all payrolls for a specific user.
     """
@@ -43,7 +47,9 @@ async def get_payrolls_by_user(user_id: UUID, db: AsyncSession = Depends(get_db)
 
 
 @router.put("/{payroll_id}", response_model=PayrollResponseSchema)
-async def update_payroll(payroll_id: int, payroll: PayrollSchema, db: AsyncSession = Depends(get_db)) -> Any:
+async def update_payroll(
+    payroll_id: int, payroll: PayrollSchema, db: AsyncSession = Depends(get_db)
+) -> Any:
     """
     Update a payroll.
     """

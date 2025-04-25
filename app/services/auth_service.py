@@ -25,14 +25,16 @@ from app.schemas.user_schema import (
 from app.schemas.subscriptions import (
     SubscriptionStatus,
     SubscriptionType,
-
 )
 from app.services.profile_service import (
     check_permission,
     get_role_by_name,
     setup_company_roles,
 )
-from app.services.subscription_service import create_staff_subscription, create_subscription
+from app.services.subscription_service import (
+    create_staff_subscription,
+    create_subscription,
+)
 from app.utils.utils import get_company_id
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -46,9 +48,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-async def create_super_admin_user(
-    db: AsyncSession, user_data: UserCreate
-) -> UserBase:
+async def create_super_admin_user(db: AsyncSession, user_data: UserCreate) -> UserBase:
     """
     Create a new admin user in the database.
 
@@ -176,6 +176,7 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserBa
     # Check if email already exists
     stmt = select(User).where(User.email == user_data.email)
     email_exists = await db.execute(stmt)
+
     if email_exists.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
@@ -197,26 +198,26 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserBa
         await db.commit()
         await db.refresh(user)
 
+        # Try to setup roles and trial subscription
         try:
-            # Set up company admin role and trial subscription
-            await setup_company_roles(db=db, company_id=user.id, name='company-admin')
-            await create_subscription(db=db, plan_name=SubscriptionType.TRIAL, user_id=user.id)
+            await setup_company_roles(db=db, company_id=user.id, name="company-admin")
+            await create_subscription(
+                db=db, plan_name=SubscriptionType.TRIAL, user_id=user.id
+            )
             return user
         except Exception as role_error:
             await db.delete(user)
             await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to setup company resources: {str(role_error)}"
+                detail=f"Failed to setup company resources: {str(role_error)}",
             )
 
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"User creation failed: {str(e)}"
+            detail=f"User creation failed: {str(e)}",
         )
-
-    return user
 
 
 async def company_create_staff_user(
@@ -232,8 +233,7 @@ async def company_create_staff_user(
     email_exists = await db.execute(stmt)
     if email_exists.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered"
+            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
 
     try:
@@ -250,29 +250,37 @@ async def company_create_staff_user(
         db.add(new_staff)
         await db.flush()
 
-        # Create user profile
-        user_profile = UserProfile(
-            full_name=user_data.full_name,
-            phone_number=user_data.phone_number,
-            department_id=user_data.department,
-            user_id=new_staff.id,
-            pay_type=user_data.pay_type
-        )
-        db.add(user_profile)
-        await db.commit()
+        # Try to create staff profile roles with company subscription
+        try:
+            user_profile = UserProfile(
+                full_name=user_data.full_name,
+                phone_number=user_data.phone_number,
+                department_id=user_data.department,
+                user_id=new_staff.id,
+                pay_type=user_data.pay_type,
+            )
+            db.add(user_profile)
+            await db.commit()
 
-        await create_staff_subscription(
-            db=db, staff_user=new_staff, current_user=current_user
-        )
+            await create_staff_subscription(
+                db=db, staff_user=new_staff, current_user=current_user
+            )
 
-        await db.refresh(new_staff)
-        return new_staff
+            await db.refresh(new_staff)
+            return new_staff
+
+        except Exception as e:
+            await db.delete(new_staff)
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to staff: {str(e)}",
+            )
 
     except Exception as e:
         await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
 
@@ -369,7 +377,7 @@ async def update_password(
         )
 
     # Verify current password
-    if not verify_password(password_data.current_password, user.password):
+    if not verify_password(password_data.current_password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
@@ -380,11 +388,11 @@ async def update_password(
 
     # Revoke all refresh tokens for this user
     await db.execute(
-        update((RefreshToken)
-               .where(
+        (RefreshToken)
+        .where(
             RefreshToken.user_id == current_user.id, RefreshToken.is_revoked == False
         )
-            .values(is_revoked=True))
+        .values(is_revoked=True)
     )
 
     # Save changes
@@ -530,14 +538,16 @@ async def confirm_password_reset(
     return user
 
 
-async def get_staff_details(db: AsyncSession, current_user: User, user_id: uuid.UUID) -> UserResponse:
+async def get_staff_details(
+    db: AsyncSession, current_user: User, user_id: uuid.UUID
+) -> UserResponse:
     """Get staff details including profile, department and role information"""
     company_id = get_company_id(current_user)
     stmt = (
         select(User)
         .options(
             joinedload(User.user_profile).joinedload(UserProfile.department),
-            joinedload(User.role)
+            joinedload(User.role),
         )
         .where(User.id == user_id)
         .where(User.company_id == company_id)
@@ -546,19 +556,20 @@ async def get_staff_details(db: AsyncSession, current_user: User, user_id: uuid.
     user = result.unique().scalar_one_or_none()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
     return {
-        "id": user.id,
+        "id": str(user.id),
         "email": user.email,
-        "company_id": user.company_id if user.company_id else None,
+        "company_id": str(user.company_id) if user.company_id else None,
         "role_name": user.role.name if user.role else None,
         "full_name": user.user_profile.full_name if user.user_profile else None,
         "phone_number": user.user_profile.phone_number if user.user_profile else None,
-        "department": user.user_profile.department.name if user.user_profile and user.user_profile.department else None,
+        "department": user.user_profile.department.name
+        if user.user_profile and user.user_profile.department
+        else None,
         "pay_type": user.user_profile.pay_type if user.user_profile else None,
-        "created_at": user.created_at
+        "created_at": user.created_at,
     }
 
 
@@ -569,7 +580,7 @@ async def get_company_staff(db: AsyncSession, current_user: User) -> list[UserRe
         select(User)
         .options(
             joinedload(User.user_profile).joinedload(UserProfile.department),
-            joinedload(User.role)
+            joinedload(User.role),
         )
         .where(User.company_id == company_id)
     )
@@ -582,37 +593,62 @@ async def get_company_staff(db: AsyncSession, current_user: User) -> list[UserRe
             "company_id": str(user.company_id) if user.company_id else None,
             "role_name": user.role.name if user.role else None,
             "full_name": user.user_profile.full_name if user.user_profile else None,
-            "phone_number": user.user_profile.phone_number if user.user_profile else None,
-            "department": user.user_profile.department.name if user.user_profile and user.user_profile.department else None,
+            "phone_number": user.user_profile.phone_number
+            if user.user_profile
+            else None,
+            "department": user.user_profile.department.name
+            if user.user_profile and user.user_profile.department
+            else None,
             "payment_type": user.user_profile.pay_type if user.user_profile else None,
             "created_at": user.created_at,
-        } for user in users]
+        }
+        for user in users
+    ]
 
 
-async def logout_user(db: AsyncSession, refresh_token: str) -> bool:
+async def logout_user(db: AsyncSession, refresh_token: str, current_user: User) -> bool:
     """
-    Logout user by revoking their refresh token
+    Logout user by revoking their refresh token(s)
     Args:
         db: Database session
-        refresh_token: The refresh token to revoke
+        refresh_token: The specific refresh token to revoke
+        user_id: Optional user ID to revoke all their tokens
     Returns:
         True if token was revoked successfully
     """
-    stmt = (
-        select(RefreshToken)
-        .where(
-            RefreshToken.token == refresh_token,
-            RefreshToken.is_revoked == False
+    try:
+        # Base query
+        base_query = select(RefreshToken).where(
+            RefreshToken.is_revoked == False)
+
+        if current_user.id:
+            # Revoke all tokens for user
+            stmt = (
+                update(RefreshToken)
+                .where(
+                    RefreshToken.user_id == current_user.id,
+                    RefreshToken.is_revoked == False,
+                )
+                .values(is_revoked=True)
+            )
+            await db.execute(stmt)
+        else:
+            # Revoke specific token
+            stmt = base_query.where(RefreshToken.token == refresh_token)
+            result = await db.execute(stmt)
+            token = result.scalar_one_or_none()
+
+            if not token:
+                return False
+
+            token.is_revoked = True
+
+        await db.commit()
+        return True
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Logout failed: {str(e)}",
         )
-    )
-    result = await db.execute(stmt)
-    token = result.scalar_one_or_none()
-
-    if not token:
-        return False
-
-    # Revoke the token
-    token.is_revoked = True
-    await db.commit()
-
-    return True

@@ -45,8 +45,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
         items_dict = {item.id: item for item in result.scalars()}
 
         if not items_dict:
-            raise HTTPException(
-                status_code=400, detail="No valid items found.")
+            raise HTTPException(status_code=400, detail="No valid items found.")
 
         # Validate item stock & calculate total price
         total_amount = Decimal(0)
@@ -160,8 +159,7 @@ async def create_order(order_data: OrderCreate, db: AsyncSession, current_user: 
     except HTTPException as http_ex:
         raise http_ex
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Order creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Order creation failed: {str(e)}")
 
 
 async def update_order(
@@ -178,8 +176,14 @@ async def update_order(
     """
 
     # check_permission(user=current_user, required_permission="update_orders")
-    user_id = get_company_id(current_user) if (
-        current_user.user_type == UserType.COMPANY or current_user.user_type == UserType.STAFF) else current_user.id
+    user_id = (
+        get_company_id(current_user)
+        if (
+            current_user.user_type == UserType.COMPANY
+            or current_user.user_type == UserType.STAFF
+        )
+        else current_user.id
+    )
     # Fetch the order to update
     query = (
         select(Order)
@@ -361,8 +365,7 @@ async def split_order(
         items_to_update = []
 
         # Create mapping of original order items for quick lookup
-        original_items_map = {
-            oi.item_id: oi for oi in original_order.order_items}
+        original_items_map = {oi.item_id: oi for oi in original_order.order_items}
 
         for item_request in split_request.items:
             original_item = original_items_map.get(item_request.item_id)
@@ -494,8 +497,7 @@ async def split_order(
         raise http_ex
     except Exception as e:
         await db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Order splitting failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Order splitting failed: {str(e)}")
 
 
 async def get_split_orders(
@@ -659,8 +661,14 @@ async def delete_split_order(
 
 
 async def get_user_or_company_orders(current_user: User, db: AsyncSession):
-    company_id = get_company_id(current_user) if (
-        current_user.user_type == UserType.COMPANY or current_user.user_type == UserType.STAFF)else current_user.id
+    company_id = (
+        get_company_id(current_user)
+        if (
+            current_user.user_type == UserType.COMPANY
+            or current_user.user_type == UserType.STAFF
+        )
+        else current_user.id
+    )
 
     company_orders_cache_key = f"orders:company:{company_id}"
     guest_orders_cache_key = f"orders:guest:{company_id}"
@@ -712,11 +720,9 @@ async def get_user_or_company_orders(current_user: User, db: AsyncSession):
             [order.model_dump() for order in order_responses], default=str
         )
         if current_user.user_type == UserType.GUEST:
-            redis_client.set(guest_orders_cache_key,
-                             cache_data, ex=settings.REDIS_EX)
+            redis_client.set(guest_orders_cache_key, cache_data, ex=settings.REDIS_EX)
         else:
-            redis_client.set(company_orders_cache_key,
-                             cache_data, ex=settings.REDIS_EX)
+            redis_client.set(company_orders_cache_key, cache_data, ex=settings.REDIS_EX)
 
     return order_responses
 
@@ -727,8 +733,7 @@ async def update_order_status(
     check_permission(user=current_user, required_permission="update_orders")
 
     user_id = get_company_id(current_user)
-    stmt = select(Order).where(Order.id == order_id,
-                               Order.company_id == user_id)
+    stmt = select(Order).where(Order.id == order_id, Order.company_id == user_id)
 
     result = await db.execute(stmt)
     order = result.scalar_one_or_none()

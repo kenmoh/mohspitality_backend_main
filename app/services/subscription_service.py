@@ -48,7 +48,6 @@ async def create_subscription(
             plan_name=plan_name,
             end_date=datetime.today() + timedelta(days=duration),
             amount=amount,
-            
         )
 
         # Add subscription to database
@@ -165,7 +164,6 @@ async def check_and_update_expired_subscriptions(db: AsyncSession):
         await db.refresh(subscription)
 
         await update_staff_subscriptions(db, expired_subscriptions.user.company_id)
-
 
 
 def create_flutterwave_subscription(plan: Subscription, current_user):

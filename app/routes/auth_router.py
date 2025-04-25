@@ -32,8 +32,7 @@ async def login_user(
         return await create_tokens(user_id=user.id, user_type=user.user_type, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
@@ -46,44 +45,38 @@ async def logout(
         success = await auth_service.logout_user(db=db, refresh_token=refresh_token)
         if not success:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
             )
         return {"message": "Successfully logged out"}
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/register-guest", status_code=status.HTTP_201_CREATED)
-async def register_guest(
+async def register_user(
     user_data: UserCreate, db: AsyncSession = Depends(get_db)
 ) -> UserBase:
     try:
         return await auth_service.create_guest_user(user_data=user_data, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/register-company", status_code=status.HTTP_201_CREATED)
-async def register_company(
+async def register_user(
     user_data: UserCreate, db: AsyncSession = Depends(get_db)
 ) -> UserBase:
     try:
         return await auth_service.create_company_user(user_data=user_data, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/register-staff", status_code=status.HTTP_201_CREATED)
-async def register_staff(
+async def register_user(
     user_data: StaffUserCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -94,8 +87,7 @@ async def register_staff(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/company-staff", status_code=status.HTTP_200_OK)
@@ -104,13 +96,10 @@ async def get_company_staff(
     db: AsyncSession = Depends(get_db),
 ) -> list[UserResponse]:
     try:
-        return await auth_service.get_company_staff(
-            db=db, current_user=current_user
-        )
+        return await auth_service.get_company_staff(db=db, current_user=current_user)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/staff-details", status_code=status.HTTP_200_OK)
@@ -125,8 +114,7 @@ async def staff_details(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post(
@@ -142,8 +130,7 @@ async def register_user(
         return await auth_service.create_super_admin_user(user_data=user_data, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post(
@@ -162,8 +149,7 @@ async def register_admin_user(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/update-user", status_code=status.HTTP_202_ACCEPTED)
@@ -178,8 +164,7 @@ async def update_user(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.put("/update-password", status_code=status.HTTP_202_ACCEPTED)
@@ -194,8 +179,7 @@ async def update_password(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/request-password-reset", status_code=status.HTTP_200_OK)
@@ -210,8 +194,7 @@ async def request_password_reset(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/confirm-password-reset", status_code=status.HTTP_200_OK)
@@ -223,32 +206,24 @@ async def confirm_password_reset(
         return await auth_service.confirm_password_reset(reset_request=data, db=db)
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/refresh", status_code=status.HTTP_200_OK)
 async def refresh_token(
-    refresh_token: str,
-    db: AsyncSession = Depends(get_db)
+    refresh_token: str, db: AsyncSession = Depends(get_db)
 ) -> TokenResponse:
     """Get new access token using refresh token from cookie"""
     try:
         if not refresh_token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="No refresh token provided"
+                detail="No refresh token provided",
             )
 
         tokens = await refresh_access_token(refresh_token, db)
 
-        return {
-            "access_token": tokens.access_token,
-            "token_type": "bearer"
-        }
+        return {"access_token": tokens.access_token, "token_type": "bearer"}
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))

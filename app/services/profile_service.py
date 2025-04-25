@@ -48,7 +48,7 @@ from app.schemas.user_schema import (
     StaffRoleCreate,
     UserProfileResponse,
     UserType,
-    NavItemResponse
+    NavItemResponse,
 )
 from app.utils.utils import encrypt_data, get_company_id
 
@@ -365,13 +365,23 @@ async def pre_create_permissions(db: AsyncSession):
 
 
 def has_permission(user: User, required_permission: str) -> bool:
-    # Fetch the user's role and permissions
-    if not user.role or not user.role.user_permissions:
+    """
+    Check if a user has the specified permission through their role.
+
+    Args:
+        user: The User object to check
+        required_permission: The permission name to check for
+
+    Returns:
+        bool: True if user has the permission, False otherwise
+    """
+    # Check if user has a role and the role has loaded permissions
+    if not user.role or not user.role.permissions:
         return False
 
-    # Check if the required_permission matches any permission name in the list
+    # Check if any permission's name matches the required permission
     return any(
-        perm.get("name") == required_permission for perm in user.role.user_permissions
+        permission.name == required_permission for permission in user.role.permissions
     )
 
 
@@ -421,7 +431,8 @@ async def create_company_profile(
         return company_profile
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 async def create_guest_profile(
@@ -455,8 +466,7 @@ async def create_staff_profile(
         department = result.scalar_one_or_none()
         if not department:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Department not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Department not found"
             )
 
         # Create Profile
@@ -477,15 +487,15 @@ async def create_staff_profile(
         raise e
 
 
-async def get_user_profile(current_user: User, db: AsyncSession) -> UserProfileResponse | CreateCompanyProfileResponse:
-
+async def get_user_profile(
+    current_user: User, db: AsyncSession
+) -> UserProfileResponse | CreateCompanyProfileResponse:
     if current_user.user_type == UserType.STAFF:
         stmt = (
             select(UserProfile)
             .where(UserProfile.user_id == current_user.id)
             .options(
-                joinedload(UserProfile.department).joinedload(
-                    Department.nav_items)
+                joinedload(UserProfile.department).joinedload(Department.nav_items)
             )
         )
         result = await db.execute(stmt)
@@ -493,13 +503,12 @@ async def get_user_profile(current_user: User, db: AsyncSession) -> UserProfileR
 
         if not profile:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Profile not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
             )
 
         department = profile.department
         department_data = None
-        if (department):
+        if department:
             department_data = {
                 "id": department.id,
                 "name": department.name,
@@ -508,10 +517,10 @@ async def get_user_profile(current_user: User, db: AsyncSession) -> UserProfileR
                     {
                         "id": nav_item.id,
                         "path_name": nav_item.path_name,
-                        "path": nav_item.path
+                        "path": nav_item.path,
                     }
                     for nav_item in department.nav_items
-                ]
+                ],
             }
 
         profile_dict = {
@@ -519,36 +528,30 @@ async def get_user_profile(current_user: User, db: AsyncSession) -> UserProfileR
             "user_type": current_user.user_type,
             "phone_number": profile.phone_number,
             "user_id": str(profile.user_id),
-            "department": department_data
+            "department": department_data,
         }
 
         return UserProfileResponse.model_validate(profile_dict)
     elif current_user.user_type == UserType.COMPANY:
-
         stmt = (
             select(User)
             .where(User.user_id == current_user.id)
-            .options(
-                joinedload(User.company_profile)
-                .joinedload(User.profile_image)
-
-            )
+            .options(joinedload(User.company_profile).joinedload(User.profile_image))
         )
         result = await db.execute(stmt)
         profile = result.unique().scalar_one_or_none()
 
         if not profile:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Profile not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found"
             )
 
         profile_dict = {
-            'company_id': profile.id,
-            'company_name': profile.company_profile.company_name,
-            'phone_number': profile.company_profile.phone_number,
-            'address': profile.company_profile.address,
-            'image_url': profile.profile_image.image_url
+            "company_id": profile.id,
+            "company_name": profile.company_profile.company_name,
+            "phone_number": profile.company_profile.phone_number,
+            "address": profile.company_profile.address,
+            "image_url": profile.profile_image.image_url,
         }
 
         return CreateCompanyProfileResponse.model_validate(profile_dict)
@@ -558,8 +561,7 @@ async def update_company_profile(
     db: AsyncSession, data: UpdateCompanyProfile, current_user: User
 ) -> CreateCompanyProfileResponse:
     # Get the profile
-    stmt = select(CompanyProfile).where(
-        CompanyProfile.company_id == current_user.id)
+    stmt = select(CompanyProfile).where(CompanyProfile.company_id == current_user.id)
     result = await db.execute(stmt)
     company_profile = result.scalar_one_or_none()
 
@@ -592,8 +594,7 @@ async def update_company_payment_gateway(
     db: AsyncSession, data: UpdateCompanyPaymentGateway, current_user: User
 ) -> MessageResponse:
     # Get the profile
-    stmt = select(CompanyProfile).where(
-        CompanyProfile.company_id == current_user.id)
+    stmt = select(CompanyProfile).where(CompanyProfile.company_id == current_user.id)
     result = await db.execute(stmt)
     company_profile = result.scalar_one_or_none()
 
@@ -626,14 +627,13 @@ async def create_staff_role(
     try:
         # First check if department with this name already exists for the company
         existing_stmt = select(Role).where(
-            Role.name == data.name.lower(),
-            Role.company_id == current_user.id
+            Role.name == data.name.lower(), Role.company_id == current_user.id
         )
         existing_result = await db.execute(existing_stmt)
         if existing_result.scalar_one_or_none() is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"A role with this name '{data.name}' already exists for this company"
+                detail=f"A role with this name '{data.name}' already exists for this company",
             )
 
         # Create Department
@@ -653,8 +653,7 @@ async def create_staff_role(
         # Fetch and add the NavItems if they exist
         if data.permissions and len(data.permissions) > 0:
             # Use a proper async query to get all permission at once
-            stmt = select(Permission).where(
-                Permission.id.in_(data.permissions))
+            stmt = select(Permission).where(Permission.id.in_(data.permissions))
             result = await db.execute(stmt)
             permissions = result.scalars().all()
 
@@ -674,11 +673,14 @@ async def create_staff_role(
             await db.flush()  # Ensure the relationship is saved
 
             # Collect data for each permission to include in response
-            permissions_data = [{
-                "id": permission.id,
-                "name": permission.name,
-                "description": permission.description,
-            } for permission in permissions]
+            permissions_data = [
+                {
+                    "id": permission.id,
+                    "name": permission.name,
+                    "description": permission.description,
+                }
+                for permission in permissions
+            ]
 
         await db.commit()
 
@@ -687,7 +689,7 @@ async def create_staff_role(
             "id": role.id,
             "name": role.name,
             "company_id": str(role.company_id),
-            "permissions": permissions
+            "permissions": permissions,
         }
 
         return response_role
@@ -698,8 +700,7 @@ async def create_staff_role(
     except Exception as e:
         await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
 
@@ -764,8 +765,7 @@ async def get_company_staff_role(
     role_id: int, db: AsyncSession, current_user: User
 ) -> RoleCreateResponse:
     result = await db.execute(
-        select(Role).where(Role.company_id ==
-                           current_user.id, Role.id == role_id)
+        select(Role).where(Role.company_id == current_user.id, Role.id == role_id)
     )
     return result.scalar_one_or_none()
 
@@ -789,13 +789,13 @@ async def create_department(
         # First check if department with this name already exists for the company
         existing_stmt = select(Department).where(
             Department.name == data.name.lower(),
-            Department.company_id == current_user.id
+            Department.company_id == current_user.id,
         )
         existing_result = await db.execute(existing_stmt)
         if existing_result.scalar_one_or_none() is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"A department with this name '{data.name}' already exists for this company"
+                detail=f"A department with this name '{data.name}' already exists for this company",
             )
 
         # Create Department
@@ -835,11 +835,14 @@ async def create_department(
             await db.flush()  # Ensure the relationship is saved
 
             # Collect data for each nav_item to include in response
-            nav_items_data = [{
-                "id": nav_item.id,
-                "path_name": nav_item.path_name,
-                "path": nav_item.path,
-            } for nav_item in nav_items]
+            nav_items_data = [
+                {
+                    "id": nav_item.id,
+                    "path_name": nav_item.path_name,
+                    "path": nav_item.path,
+                }
+                for nav_item in nav_items
+            ]
 
         await db.commit()
 
@@ -848,7 +851,7 @@ async def create_department(
             "id": department.id,
             "name": department.name,
             "company_id": str(department.company_id),
-            "nav_items": nav_items_data
+            "nav_items": nav_items_data,
         }
 
         return response_dept
@@ -859,8 +862,7 @@ async def create_department(
     except Exception as e:
         await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
 
@@ -875,10 +877,7 @@ async def get_company_departments(
     return [DepartmentResponse.model_validate(department) for department in departments]
 
 
-async def get_nav_items(
-    db: AsyncSession
-) -> list[NavItemResponse]:
-
+async def get_nav_items(db: AsyncSession) -> list[NavItemResponse]:
     stmt = select(NavItem)
     result = await db.execute(stmt)
     nav_items = result.scalars().all()
@@ -897,8 +896,7 @@ async def delete_company_department(
 
     # Find the department
     stmt = select(Department).where(
-        (Department.company_id == company_id) & (
-            Department.id == department_id)
+        (Department.company_id == company_id) & (Department.id == department_id)
     )
     result = await db.execute(stmt)
     department = result.scalar_one_or_none()
@@ -961,8 +959,9 @@ async def get_company_no_post_list(
     return no_post_list
 
 
-async def create_outlet(current_user: User, data: OutletCreate, db: AsyncSession) -> OutleResponse:
-
+async def create_outlet(
+    current_user: User, data: OutletCreate, db: AsyncSession
+) -> OutleResponse:
     check_permission(current_user, required_permission="create_outlets")
 
     try:
@@ -1035,7 +1034,7 @@ async def delete_company_outlet(
 async def create_rate(
     data: RatetCreate, current_user: User, db: AsyncSession
 ) -> RatetResponse:
-    await check_permission(user=current_user, required_permission='create_rate')
+    await check_permission(user=current_user, required_permission="create_rate")
     company_id = get_company_id(current_user)
     try:
         # Create a new rate
@@ -1052,8 +1051,7 @@ async def create_rate(
 
         return rate
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 async def get_company_rates(
@@ -1080,15 +1078,13 @@ async def delete_company_rate(
     company_id = get_company_id(current_user)
 
     # Find the rate
-    stmt = select(Rate).where(Rate.id == rate_id).where(
-        Rate.company_id == company_id)
+    stmt = select(Rate).where(Rate.id == rate_id).where(Rate.company_id == company_id)
     result = await db.execute(stmt)
     rate = result.scalar_one_or_none()
 
     # Check if rate exists
     if not rate:
-        raise HTTPException(
-            status_code=404, detail=f"Rate with ID {rate_id} not found")
+        raise HTTPException(status_code=404, detail=f"Rate with ID {rate_id} not found")
 
     # Delete the rate
     await db.delete(rate)

@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from app.models.models import User, RefreshToken
 from app.schemas.user_schema import TokenResponse
@@ -29,7 +30,8 @@ async def create_refresh_token(user_id: str, user_type: str, db: AsyncSession) -
     expires_at = datetime.now() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
     refresh_token = RefreshToken(
-        token=token, user_id=user_id, user_type=user_type, expires_at=expires_at)
+        token=token, user_id=user_id, user_type=user_type, expires_at=expires_at
+    )
 
     db.add(refresh_token)
     await db.commit()
@@ -37,13 +39,17 @@ async def create_refresh_token(user_id: str, user_type: str, db: AsyncSession) -
     return token
 
 
-async def create_tokens(user_id: str, user_type: str, db: AsyncSession) -> TokenResponse:
-    access_token = create_access_token(
-        {"sub": str(user_id), 'user_type': user_type})
+async def create_tokens(
+    user_id: str, user_type: str, db: AsyncSession
+) -> TokenResponse:
+    access_token = create_access_token({"sub": str(user_id), "user_type": user_type})
     refresh_token = await create_refresh_token(user_id, user_type, db)
 
     return TokenResponse(
-        access_token=access_token, refresh_token=refresh_token, user_type=user_type, token_type="bearer"
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user_type=user_type,
+        token_type="bearer",
     )
 
 
@@ -113,29 +119,57 @@ async def revoke_refresh_token(token: str, db: AsyncSession) -> bool:
     return row is not None
 
 
-async def refresh_access_token(refresh_token: str, db: AsyncSession):
-    """Create new access token using refresh token"""
-    # Find the refresh token
-    stmt = select(RefreshToken).where(
-        RefreshToken.token == refresh_token,
-        RefreshToken.is_revoked == False,
-        RefreshToken.expires_at > datetime.now()
-    )
-    result = await db.execute(stmt)
-    token = result.scalar_one_or_none()
-
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token"
+async def refresh_access_token(refresh_token: str, db: AsyncSession) -> dict:
+    """Create new access and refresh tokens"""
+    try:
+        # Verify the refresh token
+        stmt = (
+            select(RefreshToken)
+            .where(
+                RefreshToken.token == refresh_token,
+                RefreshToken.is_revoked == False,
+                RefreshToken.expires_at > datetime.utcnow(),
+            )
+            .options(joinedload(RefreshToken.user))
         )
 
-    # Create new access token
-    access_token = create_access_token(
-        data={"user_id": str(token.user_id), "user_type": token.user_type}
-    )
+        result = await db.execute(stmt)
+        token = result.scalar_one_or_none()
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token",
+            )
+
+        # Create new access token
+        access_token = create_access_token(
+            data={"user_id": str(token.user_id), "user_type": token.user.user_type}
+        )
+
+        # Create new refresh token
+        new_refresh_token = str(uuid.uuid4())
+
+        # Save new refresh token
+        new_token = RefreshToken(
+            token=new_refresh_token,
+            user_id=token.user_id,
+            user_type=token.user.user_type,
+            expires_at=datetime.now() + timedelta(days=7),
+        )
+
+        # Revoke old refresh token
+        token.is_revoked = True
+
+        db.add(new_token)
+        await db.commit()
+
+        return {
+            "access_token": access_token,
+            "refresh_token": new_refresh_token,
+            "token_type": "bearer",
+        }
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))

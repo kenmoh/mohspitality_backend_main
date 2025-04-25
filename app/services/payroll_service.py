@@ -21,10 +21,14 @@ class PayrollService:
         return result.scalar_one_or_none()
 
     async def get_payrolls_by_user(self, user_id: UUID) -> list[Payroll]:
-        result = await self.db.execute(select(Payroll).where(Payroll.user_id == user_id))
+        result = await self.db.execute(
+            select(Payroll).where(Payroll.user_id == user_id)
+        )
         return result.scalars().all()
 
-    async def update_payroll(self, payroll_id: int, payroll: PayrollSchema) -> Payroll | None:
+    async def update_payroll(
+        self, payroll_id: int, payroll: PayrollSchema
+    ) -> Payroll | None:
         db_payroll = await self.get_payroll(payroll_id)
         if db_payroll:
             for key, value in payroll.dict(exclude_unset=True).items():
