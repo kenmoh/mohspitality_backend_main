@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from psycopg2 import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload, joinedload
 from app.models.models import (
     Department,
     NoPost,
@@ -388,6 +388,24 @@ async def get_user_allowed_routes(user: User, db: AsyncSession) -> list[str]:
 
     # Extract all nav item paths
     return [nav_item.path for nav_item in department.nav_items]
+    
+
+async def check_allowed_route(
+    request: Request, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> None:
+    # If the user is a company admin, they have full access
+    if current_user.user_type == UserTyep.COMPANY:
+        return None
+
+    # Otherwise, check if the route is in the list of allowed routes
+    allowed_routes = await get_user_allowed_routes(current_user, db)
+    
+    if request.url.path not in allowed_routes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this route"
+        )
+
 
 def has_permission(user: User, required_permission: str) -> bool:
     """
