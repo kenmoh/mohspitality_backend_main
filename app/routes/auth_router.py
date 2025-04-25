@@ -37,7 +37,7 @@ async def login_user(
 	    refresh_token=token.refresh_token,
 	    user_type=token.user_type,
 	    allowed_routes=allowed_routes,
-            access_token=tokens.access_token,
+            access_token=token.access_token,
         )
 
     except Exception as e:
