@@ -181,23 +181,40 @@ async def create_company_user(db: AsyncSession, user_data: UserCreate) -> UserBa
             status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
         )
 
-    # Create the user
-    user = User(
-        email=user_data.email,
-        password=hash_password(user_data.password),
-        user_type=UserType.COMPANY,
-        is_active=True,
-        is_superuser=False,
-        updated_at=datetime.now(),
-    )
+    try:
+        # Create the user
+        user = User(
+            email=user_data.email,
+            password=hash_password(user_data.password),
+            user_type=UserType.COMPANY,
+            is_active=True,
+            is_superuser=False,
+            updated_at=datetime.now(),
+        )
 
-    # Add user to database
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+        # Add user to database
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
 
-    await setup_company_roles(db=db, company_id=user.id, name='company-admin')
-    await create_subscription(db=db, plan_name=SubscriptionType.TRIAL, user_id=user.id)
+        try:
+            # Set up company admin role and trial subscription
+            await setup_company_roles(db=db, company_id=user.id, name='company-admin')
+            await create_subscription(db=db, plan_name=SubscriptionType.TRIAL, user_id=user.id)
+            return user
+        except Exception as role_error:
+            await db.delete(user)
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to setup company resources: {str(role_error)}"
+            )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"User creation failed: {str(e)}"
+        )
 
     return user
 

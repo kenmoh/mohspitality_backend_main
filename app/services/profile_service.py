@@ -308,22 +308,24 @@ async def get_permission_by_name(name: str, db: AsyncSession):
 async def setup_company_roles(db: AsyncSession, company_id: UUID, name: str):
     """
     Set up default roles and permissions for a newly created company.
+    Ensures no duplicate permissions are added.
 
     Args:
         db: Database session
         company_user: The company user for which to create roles
+        name: Name of the role to create
 
     Returns:
         List of created roles
     """
-    result = await db.execute(select(Permission.name))
-    action_resource_list = set(result.scalars().all())
+    result = await db.execute(select(Permission).distinct())
+    permissions = result.scalars().all()
 
     # Create the role
     company_role = Role(
         company_id=company_id,
-        name=str,
-        permissions=action_resource_list,
+        name=name,
+        permissions=permissions,
     )
 
     db.add(company_role)
