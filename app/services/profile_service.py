@@ -1,7 +1,7 @@
 from datetime import datetime
 import re
 from uuid import UUID
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Depends, Request
 from psycopg2 import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +51,8 @@ from app.schemas.user_schema import (
     NavItemResponse,
 )
 from app.utils.utils import encrypt_data, get_company_id
+from app.auth.auth import get_current_user
+from app.database.database import get_db
 
 
 # def generate_permission(action: ActionEnum, resource: ResourceEnum) -> str:
